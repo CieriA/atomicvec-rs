@@ -194,6 +194,31 @@ impl<T> AtomicVec<T> {
     pub fn new(capacity: usize) -> Self {
         Self::new_in(capacity, Global)
     }
+
+    pub fn from_elem(capacity: usize, elem: T) -> Self
+    where
+        T: Copy,
+    {
+        let this = Self::new(capacity);
+        let guard = this.lock().unwrap();
+        for _ in 0..capacity {
+            guard.push(elem);
+        }
+        drop(guard);
+        this
+    }
+    pub fn from_default(capacity: usize) -> Self
+    where
+        T: Default,
+    {
+        let this = Self::new(capacity);
+        let guard = this.lock().unwrap();
+        for i in 0..capacity {
+            guard.push(T::default());
+        }
+        drop(guard);
+        this
+    }
 }
 impl<T, A: Allocator> ops::Index<usize> for AtomicVec<T, A> {
     type Output = T;
