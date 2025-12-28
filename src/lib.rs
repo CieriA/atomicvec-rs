@@ -41,13 +41,13 @@ pub struct AtomicVec<T, A: Allocator = Global> {
     mutex: Mutex<()>,
 }
 
-/// # Safety
+/// # Safety:
 /// If both `T` and `A` are [`Send`], it is safe to transfer an [`AtomicVec<T,
 /// A>`] between threads as we have exclusive ownership of the buffer.
 ///
 /// No thread can access the data while it's being moved.
 unsafe impl<T: Send, A: Allocator + Send> Send for AtomicVec<T, A> {}
-/// # Safety
+/// # Safety:
 /// If both `T` and `A` are [`Sync`], there's no interior mutability outside
 /// the [`mutex`](Mutex) and the [`len`](AtomicUsize) (which is thread-safe).
 ///
@@ -180,7 +180,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     /// * at least `len` elements starting from `ptr` need to be properly
     ///   initialized values of type `T`.
     #[inline]
-    pub fn from_parts_in(ptr: NonNull<T>, len: AtomicUsize, capacity: usize, alloc: A) -> Self {
+    pub unsafe fn from_parts_in(ptr: NonNull<T>, len: AtomicUsize, capacity: usize, alloc: A) -> Self {
         Self {
             // SAFETY: the  safety contract must be upheld by the caller
             buf: unsafe {
@@ -210,7 +210,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     /// * at least `len` elements starting from `ptr` need to be properly
     ///   initialized values of type `T`.
     #[inline]
-    pub fn from_raw_parts_in(ptr: *mut T, len: AtomicUsize, capacity: usize, alloc: A) -> Self {
+    pub unsafe fn from_raw_parts_in(ptr: *mut T, len: AtomicUsize, capacity: usize, alloc: A) -> Self {
         Self {
             // SAFETY: the  safety contract must be upheld by the caller
             buf: unsafe {
@@ -314,7 +314,7 @@ impl<T> AtomicVec<T> {
     /// * at least `len` elements starting from `ptr` need to be properly
     ///   initialized values of type `T`.
     #[inline]
-    pub fn from_parts(ptr: NonNull<T>, len: AtomicUsize, capacity: usize) -> Self {
+    pub unsafe fn from_parts(ptr: NonNull<T>, len: AtomicUsize, capacity: usize) -> Self {
         Self {
             // SAFETY: the  safety contract must be upheld by the caller
             buf: unsafe {
@@ -344,7 +344,7 @@ impl<T> AtomicVec<T> {
     /// * at least `len` elements starting from `ptr` need to be properly
     ///   initialized values of type `T`.
     #[inline]
-    pub fn from_raw_parts(ptr: *mut T, len: AtomicUsize, capacity: usize) -> Self {
+    pub unsafe fn from_raw_parts(ptr: *mut T, len: AtomicUsize, capacity: usize) -> Self {
         Self {
             // SAFETY: the  safety contract must be upheld by the caller
             buf: unsafe {
