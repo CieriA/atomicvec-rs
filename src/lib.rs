@@ -195,6 +195,7 @@ impl<T> AtomicVec<T> {
         Self::new_in(capacity, Global)
     }
 
+    #[must_use]
     pub fn from_elem(capacity: usize, elem: T) -> Self
     where
         T: Copy,
@@ -207,13 +208,14 @@ impl<T> AtomicVec<T> {
         drop(guard);
         this
     }
+    #[must_use]
     pub fn from_default(capacity: usize) -> Self
     where
         T: Default,
     {
         let this = Self::new(capacity);
         let guard = this.lock().unwrap();
-        for i in 0..capacity {
+        for _ in 0..capacity {
             guard.push(T::default());
         }
         drop(guard);
