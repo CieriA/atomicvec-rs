@@ -147,7 +147,7 @@ impl<T, A: Allocator> RawAtomicVec<T, A> {
 
 impl<T, A: Allocator> Drop for RawAtomicVec<T, A> {
     fn drop(&mut self) {
-        // if T::IS_ZST then cap is zero
+        // if T::IS_ZST then cap is zero. if the allocated size is 0, then cap is zero.
         if self.cap == Cap::ZERO {
             return;
         }
@@ -155,9 +155,9 @@ impl<T, A: Allocator> Drop for RawAtomicVec<T, A> {
         let size = size_of::<T>() * self.cap.get();
         let align = align_of::<T>();
         // SAFETY:
-        //        1. `!T::IS_ZST`
-        //        2. `size <= isize::MAX` is already checked in the constructor
-        //        3. the constructed layout is the same as in the constructor
+        // * `!T::IS_ZST`
+        // * `size <= isize::MAX` is already checked in the constructor
+        // * the constructed layout is the same as in the constructor
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, align);
             self.alloc.deallocate(self.ptr, layout);
