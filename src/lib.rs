@@ -1,5 +1,5 @@
 //! A fixed-capacity [`Vec`] which allows concurrences reads and
-//! spin-lock writes.
+//! exclusive writes.
 //!
 //! [`AtomicVec`] is designed for situations where reads need to
 //! be extremely fast and cannot be blocked by writes. The
@@ -33,7 +33,7 @@ use {
 };
 
 /// A fixed-capacity [`Vec`] which allows concurrent reads and
-/// spin-lock writes.
+/// exclusive writes.
 pub struct AtomicVec<T, A: Allocator = Global> {
     buf: RawAtomicVec<T, A>,
     len: AtomicUsize,
@@ -79,18 +79,18 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     #[inline]
     #[must_use]
     pub const fn as_ptr(&self) -> *const T {
-        self.buf.ptr()
+        self.buf.as_ptr()
     }
     #[inline]
     #[must_use]
     pub const fn as_mut_ptr(&mut self) -> *mut T {
-        self.buf.ptr()
+        self.buf.as_mut_ptr()
     }
     // FIXME should this be &mut self? if yes, what do we do in guard.rs?
     #[inline]
     #[must_use]
     pub const fn as_non_null(&self) -> NonNull<T> {
-        self.buf.non_null()
+        self.buf.as_non_null()
     }
     #[inline]
     #[must_use]
@@ -380,7 +380,7 @@ impl<T> AtomicVec<T> {
         T: Copy,
     {
         let this = Self::new(capacity);
-        let guard = this.lock().unwrap();
+        let mut guard = this.lock().unwrap();
         for _ in 0..capacity {
             guard.push(elem);
         }
@@ -393,7 +393,7 @@ impl<T> AtomicVec<T> {
         T: Default,
     {
         let this = Self::new(capacity);
-        let guard = this.lock().unwrap();
+        let mut guard = this.lock().unwrap();
         for _ in 0..capacity {
             guard.push(T::default());
         }
@@ -408,7 +408,7 @@ impl<T> AtomicVec<T> {
     /// [`from_parts`](AtomicVec::from_parts).
     #[inline]
     pub fn into_parts(self) -> (NonNull<T>, usize, usize) {
-        let this = ManuallyDrop::new(self);
+        let mut this = ManuallyDrop::new(self);
         (this.as_non_null(), this.len(), this.capacity())
     }
     /// Decomposes a [`AtomicVec<T>`] into its raw components:

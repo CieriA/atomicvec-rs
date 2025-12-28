@@ -37,7 +37,7 @@ impl<T, A: Allocator> AtomicVecGuard<'_, T, A> {
     }
     /// # Panics
     /// if the vec is full (i.e. capacity == len).
-    pub fn push(&self, value: T) {
+    pub fn push(&mut self, value: T) {
         // We locked the mutex so writes cannot happen.
         let len = self.vec.len.load(Ordering::Relaxed);
         let cap = self.vec.capacity();

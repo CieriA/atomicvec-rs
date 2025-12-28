@@ -125,13 +125,18 @@ impl<T, A: Allocator> RawAtomicVec<T, A> {
             _marker: PhantomData,
         }
     }
+    // FIXME should these be taking &mut self?
     #[inline]
-    pub(crate) const fn non_null(&self) -> NonNull<T> {
+    pub(crate) const fn as_non_null(&self) -> NonNull<T> {
         self.ptr.cast()
     }
     #[inline]
-    pub(crate) const fn ptr(&self) -> *mut T {
-        self.non_null().as_ptr()
+    pub(crate) const fn as_mut_ptr(&mut self) -> *mut T {
+        self.as_non_null().as_ptr()
+    }
+    #[inline]
+    pub(crate) const fn as_ptr(&self) -> *const T {
+        self.ptr.as_ptr() as _
     }
     #[inline]
     pub(crate) const fn capacity(&self) -> usize {
