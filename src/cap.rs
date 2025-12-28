@@ -24,6 +24,7 @@ impl Cap {
     pub(crate) const fn try_new<T>(cap: usize) -> Option<Self> {
         const I_MAX: usize = isize::MAX as usize;
         match cap {
+            _ if T::IS_ZST => Some(Cap::ZERO),
             // SAFETY: `cap` is in the correct range of values.
             0..I_MAX => Some(unsafe { Self::new_unchecked::<T>(cap) }),
             _ => None,

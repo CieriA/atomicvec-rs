@@ -129,7 +129,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     /// use atomicvec::AtomicVec;
     /// use std::alloc::System;
     ///
-    /// let my_atomic_vec = AtomicVec::try_new_in(10, System);
+    /// let my_atomic_vec: AtomicVec<u32, _> = AtomicVec::try_new_in(10, System).unwrap();
     /// ```
     pub fn try_new_in(
         capacity: usize,
@@ -155,7 +155,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     /// use atomicvec::AtomicVec;
     /// use std::alloc::System;
     ///
-    /// let my_atomic_vec = AtomicVec::new_in(10, System);
+    /// let my_atomic_vec: AtomicVec<u32, _> = AtomicVec::new_in(10, System);
     /// ```
     #[inline]
     #[must_use]
@@ -295,20 +295,20 @@ impl<T> AtomicVec<T> {
     /// ```
     /// use atomicvec::AtomicVec;
     ///
-    /// let my_atomic_vec = AtomicVec::try_new(10);
+    /// let my_atomic_vec: AtomicVec<()> = AtomicVec::try_new(10).unwrap();
     /// ```
     #[inline]
     pub fn try_new(capacity: usize) -> Result<Self, TryReserveError> {
         Self::try_new_in(capacity, Global)
     }
 
-    /// Constructs a new [`RawAtomicVec<T>`].
+    /// Constructs a new [`AtomicVec<T>`].
     ///
     /// # Examples
     /// ```
     /// use atomicvec::AtomicVec;
     ///
-    /// let my_atomic_vec = AtomicVec::new(10);
+    /// let my_atomic_vec: AtomicVec<String> = AtomicVec::new(10);
     /// ```
     #[inline]
     #[must_use]
@@ -406,6 +406,10 @@ impl<T> AtomicVec<T> {
 }
 impl<T, A: Allocator> Drop for AtomicVec<T, A> {
     fn drop(&mut self) {
+        // if T::IS_ZST capacity() returns usize::MAX
+        if self.capacity() == 0 {
+            return;
+        }
         // SAFETY: all elements are correctly aligned.
         //  see AtomicVec::as_slice for safety.
         unsafe {
@@ -416,7 +420,7 @@ impl<T, A: Allocator> Drop for AtomicVec<T, A> {
         }
     }
 }
-/// FIXME: I don't know if this is sound
+
 impl<T, A: Allocator> ops::Deref for AtomicVec<T, A> {
     type Target = [T];
     #[inline]
@@ -425,7 +429,6 @@ impl<T, A: Allocator> ops::Deref for AtomicVec<T, A> {
     }
 }
 
-/// FIXME: I don't know if this is sound
 impl<T, I, A> ops::Index<I> for AtomicVec<T, A>
 where
     I: SliceIndex<[T]>,
@@ -437,7 +440,6 @@ where
         ops::Index::index(&**self, index)
     }
 }
-// FIXME Is this sound? I think it is
 impl<T, A: Allocator> From<Vec<T, A>> for AtomicVec<T, A> {
     #[inline]
     fn from(value: Vec<T, A>) -> Self {
