@@ -23,6 +23,7 @@ use {
         alloc::{Allocator, Global},
         ops,
         ptr::NonNull,
+        slice::{self, SliceIndex},
         sync::{
             Mutex,
             atomic::{AtomicUsize, Ordering},
@@ -37,23 +38,22 @@ pub struct AtomicVec<T, A: Allocator = Global> {
     len: AtomicUsize,
     mutex: Mutex<()>,
 }
-/// SAFETY: `AtomicVec` owns its data (the `RawAtomicVec` buffer).
-/// It is safe to send it to another thread if the elements `T`
-/// can be sent and the allocator `A` is also `Send`.
-/// Since we have exclusive ownership of the buffer, no other thread
-/// can access the data while it is being moved.
-unsafe impl<T: Send, A: Allocator + Send> Send for AtomicVec<T, A> {}
-/// SAFETY: `AtomicVec` is safe to share between threads because:
-/// 1. Concurrent writes are synchronized via a `Mutex`.
-/// 2. Concurrent reads (via `as_slice` or `index`) are synchronized with writes
-///    using `Ordering::Acquire` and `Ordering::Release` on the `len` field,
-///    ensuring memory visibility.
-/// 3. The heap pointer in `RawAtomicVec` is immutable for the lifetime of the
-///    vector, preventing Use-After-Free during concurrent access. This is valid
-///    only if `T` is `Sync`.
-unsafe impl<T: Sync, A: Allocator + Sync> Sync for AtomicVec<T, A> {}
 
-/// Getters
+/// # Safety
+/// If both `T` and `A` are [`Send`], it is safe to transfer an [`AtomicVec<T,
+/// A>`] between threads as we have exclusive ownership of the buffer.
+///
+/// No thread can access the data while it's being moved.
+unsafe impl<T: Send, A: Allocator + Send> Send for AtomicVec<T, A> {}
+/// # Safety
+/// If both `T` and `A` are [`Sync`], there's no interior mutability outside
+/// the [`mutex`](Mutex) and the [`len`](AtomicUsize) (which is thread-safe).
+///
+/// All writes to the buffer are handled along the [`mutex`](Mutex), and so
+/// this collection is [`Sync`]
+unsafe impl<T: Send + Sync, A: Allocator + Sync> Sync for AtomicVec<T, A> {}
+
+/// Getters for [`AtomicVec<T>`]
 impl<T, A: Allocator> AtomicVec<T, A> {
     #[inline]
     #[must_use]
@@ -89,6 +89,18 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     #[must_use]
     pub const fn as_non_null(&self) -> NonNull<T> {
         self.buf.non_null()
+    }
+    #[inline]
+    #[must_use]
+    pub fn as_slice(&self) -> &[T] {
+        // SAFETY:
+        // * `self.as_ptr()` is never null, and valid for reads up to
+        //   `self.len()` if we can have a reference to `self` (which we do)
+        // * the entire block of memory is within a single allocation
+        // * at least `self.len()` number of elements are correctly initialized.
+        // * `capacity * size_of::<T>()` doesn't overflow `isize::MAX`, so
+        //   neither does `self.len() * size_of::<T>()`
+        unsafe { slice::from_raw_parts(self.as_ptr(), self.len()) }
     }
 }
 
@@ -150,6 +162,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
         }
     }
 
+    // TODO: create an error for this (now it is an option)
     #[inline]
     pub fn lock(&self) -> Option<AtomicVecGuard<'_, T, A>> {
         let guard = self.mutex.lock().ok()?;
@@ -222,14 +235,24 @@ impl<T> AtomicVec<T> {
         this
     }
 }
-impl<T, A: Allocator> ops::Index<usize> for AtomicVec<T, A> {
-    type Output = T;
-    fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.len());
-        // SAFETY:
-        // `index` is inside the allocated block and
-        // the data at that index is already initialized.
-        // `index < capacity` so this cannot overflow isize.
-        unsafe { self.as_non_null().add(index).as_ref() }
+/// FIXME: I don't know if this is sound
+impl<T, A: Allocator> ops::Deref for AtomicVec<T, A> {
+    type Target = [T];
+    #[inline]
+    fn deref(&self) -> &[T] {
+        self.as_slice()
+    }
+}
+
+/// FIXME: I don't know if this is sound
+impl<T, I, A> ops::Index<I> for AtomicVec<T, A>
+where
+    I: SliceIndex<[T]>,
+    A: Allocator,
+{
+    type Output = <I as SliceIndex<[T]>>::Output;
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        ops::Index::index(&**self, index)
     }
 }
