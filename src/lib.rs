@@ -446,10 +446,10 @@ where
 }
 impl<T, A: Allocator> From<Vec<T,A>> for AtomicVec<T, A> {
     fn from(value: Vec<T, A>) -> Self {
+        let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
         // SAFETY: the `AtomicVec` is constructed from parts of the given `Vec`
         // so this is safe.
         unsafe {
-            let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
             Self::from_parts_in(ptr, AtomicUsize::new(len), cap, alloc)
         }
     }
