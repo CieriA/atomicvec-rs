@@ -1,1 +1,16 @@
-/target
+# Rust
+target/
+*.pbd
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+# OS
+**/.DS_Store
