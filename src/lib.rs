@@ -444,7 +444,9 @@ where
         ops::Index::index(&**self, index)
     }
 }
+// FIXME Is this sound? I think it is
 impl<T, A: Allocator> From<Vec<T,A>> for AtomicVec<T, A> {
+    #[inline]
     fn from(value: Vec<T, A>) -> Self {
         let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
         // SAFETY: the `AtomicVec` is constructed from parts of the given `Vec`
