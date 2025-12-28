@@ -406,7 +406,7 @@ impl<T> AtomicVec<T> {
 }
 impl<T, A: Allocator> Drop for AtomicVec<T, A> {
     fn drop(&mut self) {
-        // if T::IS_ZST capacity() returns usize::MAX
+        // if `T::IS_ZST` then `capacity()` returns `usize::MAX`
         if self.capacity() == 0 {
             return;
         }

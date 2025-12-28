@@ -66,3 +66,29 @@ fn initialized_drop() {
     }
     assert_eq!(COUNTER.load(Ordering::Relaxed), 100);
 }
+
+// ------------------- test write -------------------
+
+#[test]
+fn write_contention() {
+    use std::{sync::Arc, thread};
+    const THREADS: usize = 10;
+    const CAP: usize = 1000;
+
+    let vec = Arc::new(AtomicVec::new(CAP));
+    let mut handles = Vec::with_capacity(THREADS);
+    for t in 0..THREADS {
+        let v = Arc::clone(&vec);
+        handles.push(thread::spawn(move || {
+            for i in 0..(CAP / THREADS) {
+                let mut guard = v.lock().unwrap();
+                guard.push(t * (CAP / THREADS) + i);
+            }
+        }));
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    assert_eq!(vec.len(), CAP);
+}
