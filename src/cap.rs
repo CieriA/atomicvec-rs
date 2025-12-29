@@ -13,8 +13,8 @@ impl Cap {
     /// A `capacity` of zero (unallocated).
     pub(crate) const ZERO: Self = Self(0);
 
-    /// Creates a new `capacity` without checking if it is <= [`isize::MAX`].
-    /// The result is undefined if it is not.
+    /// Creates a new `capacity` without checking if it is <=
+    /// [`isize::MAX`]. The result is undefined if it is not.
     ///
     /// # Safety
     /// `cap` must be <= [`isize::MAX`]

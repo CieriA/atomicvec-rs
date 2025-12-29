@@ -15,7 +15,8 @@ mod tests;
 
 use {
     crate::{
-        cap::Cap, error::TryReserveError, guard::GrowGuard, raw::RawGrowLock,
+        cap::Cap, error::TryReserveError, guard::GrowGuard,
+        raw::RawGrowLock,
     },
     std::{
         alloc::{Allocator, Global},
@@ -46,8 +47,8 @@ pub struct GrowLock<T, A: Allocator = Global> {
 
 /// # Safety:
 /// If both `T` and `A` are [`Send`], it is safe to transfer an
-/// [`GrowLock<T, A>`] between threads as we have exclusive ownership of the
-/// buffer.
+/// [`GrowLock<T, A>`] between threads as we have exclusive ownership of
+/// the buffer.
 ///
 /// No thread can access the data while it's being moved.
 unsafe impl<T, A> Send for GrowLock<T, A>
@@ -57,8 +58,9 @@ where
 {
 }
 /// # Safety:
-/// If both `T` and `A` are [`Sync`], there's no interior mutability outside
-/// the [`mutex`](Mutex) and the [`len`](AtomicUsize) (which is thread-safe).
+/// If both `T` and `A` are [`Sync`], there's no interior mutability
+/// outside the [`mutex`](Mutex) and the [`len`](AtomicUsize) (which is
+/// thread-safe).
 ///
 /// All writes to the buffer are handled along the [`mutex`](Mutex), and so
 /// this collection is [`Sync`]
@@ -124,9 +126,11 @@ impl<T, A: Allocator> GrowLock<T, A> {
     pub fn as_slice(&self) -> &[T] {
         // SAFETY:
         // * `self.as_ptr()` is never null, and valid for reads up to
-        //   `self.len()` if we can have a reference to `self` (which we do)
+        //   `self.len()` if we can have a reference to `self` (which we
+        //   do)
         // * the entire block of memory is within a single allocation
-        // * at least `self.len()` number of elements are correctly initialized.
+        // * at least `self.len()` number of elements are correctly
+        //   initialized.
         // * `capacity * size_of::<T>()` doesn't overflow `isize::MAX`, so
         //   neither does `self.len() * size_of::<T>()`
         unsafe { slice::from_raw_parts(self.as_ptr(), self.len()) }
@@ -178,8 +182,9 @@ impl<T, A: Allocator> GrowLock<T, A> {
     #[must_use]
     #[allow(clippy::missing_panics_doc)]
     pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
-        let cap = Cap::new::<T>(capacity)
-            .unwrap_or_else(|| panic!("{}", TryReserveError::CapacityOverflow));
+        let cap = Cap::new::<T>(capacity).unwrap_or_else(|| {
+            panic!("{}", TryReserveError::CapacityOverflow)
+        });
         let buf = RawGrowLock::with_capacity_in(cap, alloc);
 
         Self {
@@ -188,18 +193,20 @@ impl<T, A: Allocator> GrowLock<T, A> {
             mutex: Mutex::new(()),
         }
     }
-    /// Constructs a new [`GrowLock<T>`] directly from a [`NonNull`] pointer,
-    /// a capacity, and an allocator.
+    /// Constructs a new [`GrowLock<T>`] directly from a [`NonNull`]
+    /// pointer, a capacity, and an allocator.
     ///
     /// # Safety
-    /// * `ptr` must be currently allocated with the given allocator `alloc`.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer was
-    ///   allocated with.
-    /// * `capacity` needs to fit the layout size that the pointer was allocated
+    /// * `ptr` must be currently allocated with the given allocator
+    ///   `alloc`.
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
     ///   with.
-    /// * the allocated size in bytes cannot exceed [`isize::MAX`] (the size is
-    ///   `self.capacity() * size_of::<T>`)
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * `capacity` needs to fit the layout size that the pointer was
+    ///   allocated with.
+    /// * the allocated size in bytes cannot exceed [`isize::MAX`] (the
+    ///   size is `self.capacity() * size_of::<T>`)
     /// * `len` must be <= `capacity`
     /// * at least `len` elements starting from `ptr` need to be properly
     ///   initialized values of type `T`.
@@ -227,12 +234,14 @@ impl<T, A: Allocator> GrowLock<T, A> {
     /// a capacity, and an allocator.
     ///
     /// # Safety
-    /// * `ptr` must be currently allocated with the given allocator `alloc`.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer was
-    ///   allocated with.
-    /// * `capacity` needs to fit the layout size that the pointer was allocated
+    /// * `ptr` must be currently allocated with the given allocator
+    ///   `alloc`.
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
     ///   with.
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * `capacity` needs to fit the layout size that the pointer was
+    ///   allocated with.
     /// * the allocated size in bytes cannot exceed [`isize::MAX`]
     /// * `len` must be <= `capacity`
     /// * at least `len` elements starting from `ptr` need to be properly
@@ -274,9 +283,9 @@ impl<T, A: Allocator> GrowLock<T, A> {
             Ok(guard) => Ok(GrowGuard::new(self, guard)),
             Err(TryLockError::Poisoned(e)) => {
                 let guard = e.into_inner();
-                Err(TryLockError::Poisoned(PoisonError::new(GrowGuard::new(
-                    self, guard,
-                ))))
+                Err(TryLockError::Poisoned(PoisonError::new(
+                    GrowGuard::new(self, guard),
+                )))
             }
 
             Err(TryLockError::WouldBlock) => Err(TryLockError::WouldBlock),
@@ -285,8 +294,8 @@ impl<T, A: Allocator> GrowLock<T, A> {
     /// Decomposes a [`GrowLock<T>`] into its raw components:
     /// ([`NonNull`] pointer, length, capacity, allocator).
     ///
-    /// After calling this function, the caller is responsible for cleaning up
-    /// the [`GrowLock<T>`]. Most often, you can do this by calling
+    /// After calling this function, the caller is responsible for cleaning
+    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
     /// [`from_parts_in`](GrowLock::from_parts_in).
     pub fn into_parts_with_alloc(self) -> (NonNull<T>, usize, usize, A) {
         let mut this = ManuallyDrop::new(self);
@@ -301,8 +310,8 @@ impl<T, A: Allocator> GrowLock<T, A> {
     /// Decomposes a [`GrowLock<T>`] into its raw components:
     /// (pointer, length, capacity, allocator).
     ///
-    /// After calling this function, the caller is responsible for cleaning up
-    /// the [`GrowLock<T>`]. Most often, you can do this by calling
+    /// After calling this function, the caller is responsible for cleaning
+    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
     /// [`from_raw_parts_in`](GrowLock::from_raw_parts_in).
     #[inline]
     pub fn into_raw_parts_with_alloc(self) -> (*mut T, usize, usize, A) {
@@ -328,7 +337,9 @@ impl<T> GrowLock<T> {
     /// let my_atomic_vec: GrowLock<()> = GrowLock::try_with_capacity(10).unwrap();
     /// ```
     #[inline]
-    pub fn try_with_capacity(capacity: usize) -> Result<Self, TryReserveError> {
+    pub fn try_with_capacity(
+        capacity: usize,
+    ) -> Result<Self, TryReserveError> {
         Self::try_with_capacity_in(capacity, Global)
     }
 
@@ -346,16 +357,17 @@ impl<T> GrowLock<T> {
         Self::with_capacity_in(capacity, Global)
     }
 
-    /// Constructs a new [`GrowLock<T>`] directly from a [`NonNull`] pointer,
-    /// and a capacity.
+    /// Constructs a new [`GrowLock<T>`] directly from a [`NonNull`]
+    /// pointer, and a capacity.
     ///
     /// # Safety
     /// * `ptr` must be currently allocated with the global allocator.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer was
-    ///   allocated with.
-    /// * `capacity` needs to fit the layout size that the pointer was allocated
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
     ///   with.
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * `capacity` needs to fit the layout size that the pointer was
+    ///   allocated with.
     /// * the allocated size in bytes cannot exceed [`isize::MAX`]
     /// * `len` must be <= `capacity`
     /// * at least `len` elements starting from `ptr` need to be properly
@@ -384,11 +396,12 @@ impl<T> GrowLock<T> {
     ///
     /// # Safety
     /// * `ptr` must be currently allocated with the global allocator.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer was
-    ///   allocated with.
-    /// * `capacity` needs to fit the layout size that the pointer was allocated
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
     ///   with.
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * `capacity` needs to fit the layout size that the pointer was
+    ///   allocated with.
     /// * the allocated size in bytes cannot exceed [`isize::MAX`]
     /// * `len` must be <= `capacity`
     /// * at least `len` elements starting from `ptr` need to be properly
@@ -415,8 +428,8 @@ impl<T> GrowLock<T> {
     /// Decomposes a [`GrowLock<T>`] into its raw components:
     /// ([`NonNull`] pointer, length, capacity).
     ///
-    /// After calling this function, the caller is responsible for cleaning up
-    /// the [`GrowLock<T>`]. Most often, you can do this by calling
+    /// After calling this function, the caller is responsible for cleaning
+    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
     /// [`from_parts`](GrowLock::from_parts).
     #[inline]
     pub fn into_parts(self) -> (NonNull<T>, usize, usize) {
@@ -426,8 +439,8 @@ impl<T> GrowLock<T> {
     /// Decomposes a [`GrowLock<T>`] into its raw components:
     /// (pointer, length, capacity).
     ///
-    /// After calling this function, the caller is responsible for cleaning up
-    /// the [`GrowLock<T>`]. Most often, you can do this by calling
+    /// After calling this function, the caller is responsible for cleaning
+    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
     /// [`from_raw_parts`](GrowLock::from_raw_parts).
     #[inline]
     pub fn into_raw_parts(self) -> (*mut T, usize, usize) {
@@ -505,8 +518,8 @@ impl<T, A: Allocator> From<Vec<T, A>> for GrowLock<T, A> {
     #[inline]
     fn from(value: Vec<T, A>) -> Self {
         let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
-        // SAFETY: the `AtomicVec` is constructed from parts of the given `Vec`
-        // so this is safe.
+        // SAFETY: the `AtomicVec` is constructed from parts of the given
+        // `Vec` so this is safe.
         unsafe { Self::from_parts_in(ptr, len, cap, alloc) }
     }
 }
@@ -514,13 +527,14 @@ impl<T, A: Allocator> From<GrowLock<T, A>> for Vec<T, A> {
     #[inline]
     fn from(value: GrowLock<T, A>) -> Self {
         let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
-        // SAFETY: the `Vec` is constructed from parts of the given `AtomicVec`
-        // so this is safe.
+        // SAFETY: the `Vec` is constructed from parts of the given
+        // `AtomicVec` so this is safe.
         unsafe { Self::from_parts_in(ptr, len, cap, alloc) }
     }
 }
 
-// ----------------------------- PartialEq impl -----------------------------
+// ----------------------------- PartialEq impl
+// -----------------------------
 
 impl<T, U, A, A2> PartialEq<GrowLock<U, A2>> for GrowLock<T, A>
 where
@@ -620,7 +634,8 @@ where
     }
 }
 
-// ----------------------------- Eq and Hash impl -----------------------------
+// ----------------------------- Eq and Hash impl
+// -----------------------------
 
 impl<T: Eq, A: Allocator> Eq for GrowLock<T, A> {}
 /// [`GrowLock`] implements [`Borrow<[T]>`], so we need to `hash` the

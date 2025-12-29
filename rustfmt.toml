@@ -1,6 +1,6 @@
 tab_spaces = 4
-max_width = 80
-comment_width = 80
+max_width = 75
+comment_width = 75
 wrap_comments = true
 
 group_imports = "StdExternalCrate"

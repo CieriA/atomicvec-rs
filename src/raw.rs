@@ -69,12 +69,14 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
     /// [`NonNull`] pointer, a capacity, and an allocator.
     ///
     /// # Safety
-    /// * `ptr` must be currently allocated with the given allocator `alloc`.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer was
-    ///   allocated with.
-    /// * capacity needs to fit the layout size that the pointer was allocated
+    /// * `ptr` must be currently allocated with the given allocator
+    ///   `alloc`.
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
     ///   with.
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * capacity needs to fit the layout size that the pointer was
+    ///   allocated with.
     /// * the allocated size in bytes cannot exceed [`isize::MAX`]
     #[inline]
     #[must_use]
@@ -94,16 +96,22 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
     /// a capacity, and an allocator.
     ///
     /// # Safety
-    /// * `ptr` must be currently allocated with the given allocator `alloc`.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer was
-    ///   allocated with.
-    /// * capacity needs to fit the layout size that the pointer was allocated
+    /// * `ptr` must be currently allocated with the given allocator
+    ///   `alloc`.
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
     ///   with.
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * capacity needs to fit the layout size that the pointer was
+    ///   allocated with.
     /// * the allocated size in bytes cannot exceed [`isize::MAX`]
     #[inline]
     #[must_use]
-    pub(crate) unsafe fn from_raw_in(ptr: *mut T, cap: Cap, alloc: A) -> Self {
+    pub(crate) unsafe fn from_raw_in(
+        ptr: *mut T,
+        cap: Cap,
+        alloc: A,
+    ) -> Self {
         Self {
             // SAFETY: the safety contract must be upheld by the caller.
             ptr: unsafe { NonNull::new_unchecked(ptr).cast() },
@@ -148,14 +156,17 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
             None
         } else {
             // SAFETY:
-            // * we allocated this chunk of memory so `unchecked_mul` and `size`
-            //   rounded to the nearest power of two both cannot overflow
-            //   `isize::MAX`.
-            // * `align` is obtained through align_of so it is a power of two.
+            // * we allocated this chunk of memory so `unchecked_mul` and
+            //   `size` rounded to the nearest power of two both cannot
+            //   overflow `isize::MAX`.
+            // * `align` is obtained through align_of so it is a power of
+            //   two.
             unsafe {
                 let size = size_of::<T>().unchecked_mul(self.cap.get());
-                let layout =
-                    Layout::from_size_align_unchecked(size, align_of::<T>());
+                let layout = Layout::from_size_align_unchecked(
+                    size,
+                    align_of::<T>(),
+                );
                 Some((self.ptr.cast(), layout))
             }
         }

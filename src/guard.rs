@@ -7,8 +7,8 @@ use {
     },
 };
 
-/// RAII structure used to release the exclusive write access of a lock when
-/// dropped.
+/// RAII structure used to release the exclusive write access of a lock
+/// when dropped.
 ///
 /// This structure is created by the [`write`][write] and
 /// [`try_write`][try_write] method on [`GrowLock`]
@@ -73,7 +73,8 @@ impl<'lock, T, A: Allocator> GrowGuard<'lock, T, A> {
 
         assert!(len < cap, "length overflow");
 
-        // SAFETY: the ptr is still in the allocated block, even after add(len)
+        // SAFETY: the ptr is still in the allocated block, even after
+        // add(len)
         unsafe {
             let dst = self.lock.as_non_null_ref().add(len);
             dst.write(value);
@@ -91,7 +92,8 @@ impl<'lock, T, A: Allocator> GrowGuard<'lock, T, A> {
             return Err(LengthError);
         }
 
-        // SAFETY: the ptr is still in the allocated block, even after add(len)
+        // SAFETY: the ptr is still in the allocated block, even after
+        // add(len)
         unsafe {
             let dst = self.lock.as_non_null_ref().add(len);
             dst.write(value);
@@ -106,8 +108,8 @@ impl<T, A: Allocator> Extend<T> for GrowGuard<'_, T, A> {
     /// Extends the [`GrowLock<T>`] with the contents of an iterator.
     ///
     /// # Panics
-    /// This panics if the iterator has more elements than `self.capacity() -
-    /// self.len()` (i.e. pushing all the elements would overflow
+    /// This panics if the iterator has more elements than `self.capacity()
+    /// - self.len()` (i.e. pushing all the elements would overflow
     /// `self.capacity()`.
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let iter = iter.into_iter();

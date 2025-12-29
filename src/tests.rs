@@ -25,8 +25,8 @@ impl Drop for AddOnDrop<'_> {
 
 // ------------------- constructors -------------------
 
-/// Tests constructors and [`GrowLock::drop`] with different kind of types and
-/// capacities.
+/// Tests constructors and [`GrowLock::drop`] with different kind of types
+/// and capacities.
 #[test]
 fn new_empty_drop_primitive() {
     let _ = GrowLock::<u32>::try_with_capacity(0);
@@ -56,8 +56,10 @@ fn new_empty_drop_zst() {
     struct MyZST;
     let _ = GrowLock::<()>::with_capacity(0);
     let _ = GrowLock::<MyZST>::try_with_capacity(1 << 60);
-    let _ =
-        GrowLock::<(), _>::try_with_capacity_in(isize::MAX as usize, System);
+    let _ = GrowLock::<(), _>::try_with_capacity_in(
+        isize::MAX as usize,
+        System,
+    );
     let v = GrowLock::<MyZST, _>::with_capacity_in(usize::MAX, System);
     assert_eq!(v.capacity(), usize::MAX);
     assert_eq!(v.buf.raw_cap(), Cap::ZERO);
@@ -129,7 +131,10 @@ fn repeat_full_macro() {
 #[test]
 fn alignment() {
     #[repr(align(64))]
-    #[allow(dead_code, reason = "We need a field to make `Aligned` non-ZST")]
+    #[allow(
+        dead_code,
+        reason = "We need a field to make `Aligned` non-ZST"
+    )]
     struct Aligned(u64);
 
     let vec = GrowLock::with_capacity(10);
@@ -179,8 +184,8 @@ fn init_drop_on_panic() {
     });
 
     assert!(result.is_err());
-    // 10 elements are pushed in the vec, the last is dropped when trying to
-    // push it.
+    // 10 elements are pushed in the vec, the last is dropped when trying
+    // to push it.
     assert_eq!(counter.load(Ordering::Relaxed), 11);
 }
 
