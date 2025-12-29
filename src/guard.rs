@@ -25,12 +25,32 @@ impl<T, A: Allocator> AtomicVecGuard<'_, T, A> {
     pub fn as_slice(&self) -> &[T] {
         self.vec.as_slice()
     }
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    #[inline]
+    #[must_use]
+    pub fn is_full(&self) -> bool {
+        self.len() == self.capacity()
+    }
+    #[inline]
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
+        self.vec.capacity()
+    }
+    #[inline]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.vec.len()
+    }
     /// # Panics
-    /// if the vec is full (i.e. capacity == len).
+    /// Panics if `self.is_full()`.
     pub fn push(&mut self, value: T) {
         // We locked the mutex so writes cannot happen.
         let len = self.vec.len.load(Ordering::Relaxed);
-        let cap = self.vec.capacity();
+        let cap = self.capacity();
 
         assert!(len < cap, "length overflow");
 
@@ -42,7 +62,7 @@ impl<T, A: Allocator> AtomicVecGuard<'_, T, A> {
         }
     }
     /// # Errors
-    /// Returns an error if the [`AtomicVec`] is full, i.e. `len == capacity`
+    /// Returns an error if `self.is_full()`.
     pub fn try_push(&mut self, value: T) -> Result<(), VecFull> {
         // We locked the mutex so writes cannot happen.
         let len = self.vec.len.load(Ordering::Relaxed);
@@ -60,5 +80,20 @@ impl<T, A: Allocator> AtomicVecGuard<'_, T, A> {
         self.vec.len.store(len + 1, Ordering::Release);
 
         Ok(())
+    }
+}
+
+impl<T, A: Allocator> Extend<T> for AtomicVecGuard<'_, T, A> {
+    /// Extends the [`AtomicVec<T>`] with the contents of an iterator.
+    /// 
+    /// # Panics
+    /// This panics if the iterator has more elements than `self.capacity() -
+    /// self.len()` (i.e. pushing all the elements would overflow
+    /// `self.capacity()`.
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        let iter = iter.into_iter();
+        for elem in iter {
+            self.push(elem);
+        }
     }
 }

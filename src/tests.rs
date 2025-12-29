@@ -2,11 +2,13 @@
 // > that causes UB. This is because the [`AtomicVec`] is
 // > instantly dropped.
 
+use std::time::Duration;
 use {
     crate::{AtomicVec, cap::Cap},
     std::{
         alloc::System,
-        sync::atomic::{AtomicUsize, Ordering},
+        sync::{atomic::{AtomicUsize, Ordering}, Arc},
+        thread
     },
 };
 
@@ -63,6 +65,33 @@ fn from_vec() {
     let vec = vec![1u32, 2, 3, 4, 5];
     let atomic_vec = AtomicVec::from(vec);
     assert_eq!(&atomic_vec[..], &[1, 2, 3, 4, 5]);
+}
+
+// ------------------- macro init -------------------
+
+#[test]
+#[ignore = "not yet implemented"]
+fn empty_macro() {
+    todo!();
+}
+#[test]
+#[ignore = "not yet implemented"]
+fn array_macro() {
+    todo!();
+}
+#[test]
+#[ignore = "not yet implemented"]
+fn repeat_macro() {
+    todo!();
+}
+
+// ------------------- representation -------------------
+#[test]
+#[ignore = "not yet implemented"]
+fn size_align() {
+    #[repr(align(64))]
+    struct _Aligned(u64);
+    todo!();
 }
 
 // ------------------- push panics -------------------
@@ -124,7 +153,6 @@ fn initialized_drop() {
 
 #[test]
 fn write_contention() {
-    use std::{sync::Arc, thread};
     const THREADS: usize = 10;
     const CAP: usize = 1000;
 
@@ -159,4 +187,38 @@ fn read_while_locked() {
         guard.push("still locked");
     }
     assert_eq!(vec.len(), 3);
+}
+
+#[test]
+fn slow_write() {
+    let vec = Arc::new(AtomicVec::with_capacity(10));
+    {
+        let mut guard = vec.lock().unwrap();
+        guard.extend(["hi", "hello", "world"]);
+    }
+    let vec_clone = Arc::clone(&vec);
+    let handle = thread::spawn(move || {
+        let mut guard = vec_clone.lock().unwrap();
+        guard.push("foo");
+        thread::sleep(Duration::from_millis(300));
+        guard.push("bar");
+    });
+
+    // we wait for the writer to take the lock
+    // (20millis is overkill, but we never know)
+    thread::sleep(Duration::from_millis(20));
+
+    assert!(vec.len() >= 3);
+    // while `handle` is writing, we still can read initialized elements.
+    assert_eq!(&vec[..3], &["hi", "hello", "world"]);
+    // here, 4th element could (and probably is) be already initialized
+    if let Some(&fourth) = vec.get(3) {
+        dbg!(fourth);
+        assert_eq!(fourth, "foo");
+    }
+
+    handle.join().unwrap();
+    // at this point all the elements are already pushed
+    assert_eq!(vec.len(), 5);
+    assert_eq!(&vec[3..], &["foo", "bar"]);
 }

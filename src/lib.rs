@@ -69,6 +69,11 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     }
     #[inline]
     #[must_use]
+    pub fn is_full(&self) -> bool {
+        self.len() == self.capacity()
+    }
+    #[inline]
+    #[must_use]
     pub const fn capacity(&self) -> usize {
         self.buf.capacity()
     }
