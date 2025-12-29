@@ -1,5 +1,5 @@
 // > NOTE: using wildcard allows `miri` to tell the exact line
-// > that causes UB. This is because the [`AtomicVec`] is
+// > that causes UB. This is because the [`GrowLock`] is
 // > instantly dropped.
 
 use {
@@ -68,63 +68,63 @@ fn new_empty_drop_zst() {
 #[test]
 fn from_vec() {
     let vec = vec![1u32, 2, 3, 4, 5];
-    let atomic_vec = GrowLock::from(vec);
-    assert_eq!(&atomic_vec[..], &[1, 2, 3, 4, 5]);
+    let lock = GrowLock::from(vec);
+    assert_eq!(&lock[..], &[1, 2, 3, 4, 5]);
 }
 
 // ------------------- macro init -------------------
 
 #[test]
 fn empty_macro() {
-    let vec: GrowLock<String> = grow_lock![];
+    let lock: GrowLock<String> = grow_lock![];
 
-    assert_eq!(vec.as_slice(), &[] as &[String]);
-    assert!(vec.is_empty());
-    assert_eq!(vec.capacity(), 0);
-    let mut guard = vec.write().unwrap();
+    assert_eq!(lock.as_slice(), &[] as &[String]);
+    assert!(lock.is_empty());
+    assert_eq!(lock.capacity(), 0);
+    let mut guard = lock.write().unwrap();
     assert!(guard.try_push("hello world".to_owned()).is_err());
 
-    assert_eq!(vec, GrowLock::<String>::with_capacity(0));
+    assert_eq!(lock, GrowLock::<String>::with_capacity(0));
 }
 #[test]
 fn array_macro() {
-    let vec: GrowLock<char> = grow_lock!(10, ['a', 'b', 'c']);
+    let lock: GrowLock<char> = grow_lock!(10, ['a', 'b', 'c']);
 
-    assert_eq!(&vec, &['a', 'b', 'c']);
+    assert_eq!(&lock, &['a', 'b', 'c']);
 
-    let mut guard = vec.write().unwrap();
+    let mut guard = lock.write().unwrap();
     for _ in 0..7 {
         guard.push('_');
     }
-    assert!(vec.is_full());
+    assert!(lock.is_full());
 }
 #[test]
 fn repeat_macro() {
-    let vec: GrowLock<String> = grow_lock!(15, ["hello".to_owned(); 4]);
-    for str in &vec[..4] {
+    let lock: GrowLock<String> = grow_lock!(15, ["hello".to_owned(); 4]);
+    for str in &lock[..4] {
         assert_eq!(str, "hello");
     }
-    let mut guard = vec.write().unwrap();
+    let mut guard = lock.write().unwrap();
     for _ in 0..11 {
         guard.push("world".to_owned());
     }
-    assert!(vec.is_full());
+    assert!(lock.is_full());
 }
 
 #[test]
 fn array_full_macro() {
-    let vec: GrowLock<char> = grow_lock!['a', 'b', 'c'];
-    assert_eq!(&vec, &['a', 'b', 'c']);
-    assert!(vec.is_full());
+    let lock: GrowLock<char> = grow_lock!['a', 'b', 'c'];
+    assert_eq!(&lock, &['a', 'b', 'c']);
+    assert!(lock.is_full());
 }
 
 #[test]
 fn repeat_full_macro() {
-    let vec: GrowLock<String> = grow_lock!["hello".to_owned(); 4];
-    for str in &vec[..4] {
+    let lock: GrowLock<String> = grow_lock!["hello".to_owned(); 4];
+    for str in &lock[..4] {
         assert_eq!(str, "hello");
     }
-    assert!(vec.is_full());
+    assert!(lock.is_full());
 }
 
 // ------------------- representation -------------------
@@ -137,16 +137,16 @@ fn alignment() {
     )]
     struct Aligned(u64);
 
-    let vec = GrowLock::with_capacity(10);
-    let mut guard = vec.write().unwrap();
+    let lock = GrowLock::with_capacity(10);
+    let mut guard = lock.write().unwrap();
     for i in 0..10 {
         guard.push(Aligned(i));
     }
-    let addr = vec.as_ptr().addr();
+    let addr = lock.as_ptr().addr();
     assert_eq!(addr % 64, 0);
 
-    let vec: GrowLock<Aligned> = grow_lock![];
-    let addr = vec.as_ptr().addr();
+    let lock: GrowLock<Aligned> = grow_lock![];
+    let addr = lock.as_ptr().addr();
     assert_eq!(addr % 64, 0);
 }
 
@@ -154,16 +154,16 @@ fn alignment() {
 #[test]
 #[should_panic(expected = "length overflow")]
 fn push_overflow() {
-    let vec = GrowLock::with_capacity(5);
-    let mut guard = vec.write().unwrap();
+    let lock = GrowLock::with_capacity(5);
+    let mut guard = lock.write().unwrap();
     for i in 0..6 {
         guard.push(i);
     }
 }
 #[test]
 fn try_push_overflow() {
-    let vec = GrowLock::with_capacity(5);
-    let mut guard = vec.write().unwrap();
+    let lock = GrowLock::with_capacity(5);
+    let mut guard = lock.write().unwrap();
     for i in 0..5 {
         assert!(guard.try_push(i).is_ok());
     }
@@ -176,15 +176,15 @@ fn init_drop_on_panic() {
 
     let counter = AtomicUsize::new(0);
     let result = panic::catch_unwind(|| {
-        let vec = GrowLock::with_capacity(10);
-        let mut guard = vec.write().unwrap();
+        let lock = GrowLock::with_capacity(10);
+        let mut guard = lock.write().unwrap();
         for _ in 0..15 {
             guard.push(AddOnDrop(&counter));
         }
     });
 
     assert!(result.is_err());
-    // 10 elements are pushed in the vec, the last is dropped when trying
+    // 10 elements are pushed in the lock, the last is dropped when trying
     // to push it.
     assert_eq!(counter.load(Ordering::Relaxed), 11);
 }
@@ -195,12 +195,12 @@ fn init_drop_on_panic() {
 fn initialized_drop() {
     let counter = AtomicUsize::new(0);
     {
-        let vec = GrowLock::with_capacity(200);
-        let mut guard = vec.write().unwrap();
+        let lock = GrowLock::with_capacity(200);
+        let mut guard = lock.write().unwrap();
         for _ in 0..100 {
             guard.push(AddOnDrop(&counter));
         }
-        // here `vec` is dropped
+        // here `lock` is dropped
     }
     assert_eq!(counter.load(Ordering::Relaxed), 100);
 }
@@ -215,12 +215,12 @@ fn zst_drop() {
         }
     }
     {
-        let vec = GrowLock::with_capacity(200);
-        let mut guard = vec.write().unwrap();
+        let lock = GrowLock::with_capacity(200);
+        let mut guard = lock.write().unwrap();
         for _ in 0..150 {
             guard.push(AddZST);
         }
-        // here `vec` is dropped
+        // here `lock` is dropped
     }
     assert_eq!(ZST_COUNTER.load(Ordering::Relaxed), 150);
 }
@@ -232,10 +232,10 @@ fn write_contention() {
     const THREADS: usize = 10;
     const CAP: usize = 1000;
 
-    let vec = Arc::new(GrowLock::with_capacity(CAP));
+    let lock = Arc::new(GrowLock::with_capacity(CAP));
     let mut handles = Vec::with_capacity(THREADS);
     for t in 0..THREADS {
-        let v = Arc::clone(&vec);
+        let v = Arc::clone(&lock);
         handles.push(thread::spawn(move || {
             for i in 0..(CAP / THREADS) {
                 let mut guard = v.write().unwrap();
@@ -247,34 +247,34 @@ fn write_contention() {
         handle.join().unwrap();
     }
 
-    assert_eq!(vec.len(), CAP);
+    assert_eq!(lock.len(), CAP);
 }
 
 // ------------------- read -------------------
 
 #[test]
 fn read_while_locked() {
-    let vec = GrowLock::with_capacity(5);
+    let lock = GrowLock::with_capacity(5);
     {
-        let mut guard = vec.write().unwrap();
+        let mut guard = lock.write().unwrap();
         guard.push("hi");
         guard.push("there");
-        assert_eq!(&vec[0..2], ["hi", "there"]);
+        assert_eq!(&lock[0..2], ["hi", "there"]);
         guard.push("still locked");
     }
-    assert_eq!(vec.len(), 3);
+    assert_eq!(lock.len(), 3);
 }
 
 #[test]
 fn slow_write() {
-    let vec = Arc::new(GrowLock::with_capacity(10));
+    let lock = Arc::new(GrowLock::with_capacity(10));
     {
-        let mut guard = vec.write().unwrap();
+        let mut guard = lock.write().unwrap();
         guard.extend(["hi", "hello", "world"]);
     }
-    let vec_clone = Arc::clone(&vec);
+    let lock_clone = Arc::clone(&lock);
     let handle = thread::spawn(move || {
-        let mut guard = vec_clone.write().unwrap();
+        let mut guard = lock_clone.write().unwrap();
         guard.push("foo");
         thread::sleep(Duration::from_millis(300));
         guard.push("bar");
@@ -284,17 +284,17 @@ fn slow_write() {
     // (20millis is overkill, but we never know)
     thread::sleep(Duration::from_millis(20));
 
-    assert!(vec.len() >= 3);
+    assert!(lock.len() >= 3);
     // while `handle` is writing, we still can read initialized elements.
-    assert_eq!(&vec[..3], &["hi", "hello", "world"]);
+    assert_eq!(&lock[..3], &["hi", "hello", "world"]);
     // here, 4th element could be (and probably is) already initialized
-    if let Some(&fourth) = vec.get(3) {
+    if let Some(&fourth) = lock.get(3) {
         dbg!(fourth);
         assert_eq!(fourth, "foo");
     }
 
     handle.join().unwrap();
     // at this point all the elements are already pushed
-    assert_eq!(vec.len(), 5);
-    assert_eq!(&vec[3..], &["foo", "bar"]);
+    assert_eq!(lock.len(), 5);
+    assert_eq!(&lock[3..], &["foo", "bar"]);
 }

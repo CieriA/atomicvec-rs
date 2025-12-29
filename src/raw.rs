@@ -96,6 +96,7 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
     /// a capacity, and an allocator.
     ///
     /// # Safety
+    /// * `ptr` must be non-null.
     /// * `ptr` must be currently allocated with the given allocator
     ///   `alloc`.
     /// * `T` needs to have the same alignment as what `ptr` was allocated
@@ -113,7 +114,7 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
         alloc: A,
     ) -> Self {
         Self {
-            // SAFETY: the safety contract must be upheld by the caller.
+            // SAFETY: the safety contract is transferred to the caller.
             ptr: unsafe { NonNull::new_unchecked(ptr).cast() },
             cap,
             alloc,

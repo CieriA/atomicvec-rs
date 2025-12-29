@@ -150,7 +150,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
     /// use growlock::GrowLock;
     /// use std::alloc::System;
     ///
-    /// let my_atomic_vec: GrowLock<u32, _> = GrowLock::try_with_capacity_in(10, System).unwrap();
+    /// let lock: GrowLock<u32, _> = GrowLock::try_with_capacity_in(10, System).unwrap();
     /// ```
     pub fn try_with_capacity_in(
         capacity: usize,
@@ -176,7 +176,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
     /// use growlock::GrowLock;
     /// use std::alloc::System;
     ///
-    /// let my_atomic_vec: GrowLock<u32, _> = GrowLock::with_capacity_in(10, System);
+    /// let lock: GrowLock<u32, _> = GrowLock::with_capacity_in(10, System);
     /// ```
     #[inline]
     #[must_use]
@@ -334,7 +334,7 @@ impl<T> GrowLock<T> {
     /// ```
     /// use growlock::GrowLock;
     ///
-    /// let my_atomic_vec: GrowLock<()> = GrowLock::try_with_capacity(10).unwrap();
+    /// let lock: GrowLock<()> = GrowLock::try_with_capacity(10).unwrap();
     /// ```
     #[inline]
     pub fn try_with_capacity(
@@ -349,7 +349,7 @@ impl<T> GrowLock<T> {
     /// ```
     /// use growlock::GrowLock;
     ///
-    /// let my_atomic_vec: GrowLock<String> = GrowLock::with_capacity(10);
+    /// let lock: GrowLock<String> = GrowLock::with_capacity(10);
     /// ```
     #[inline]
     #[must_use]
@@ -455,7 +455,7 @@ impl<T, A: Allocator> Drop for GrowLock<T, A> {
             return;
         }
         // SAFETY: all elements are correctly aligned.
-        //  see AtomicVec::as_slice for safety.
+        //  see GrowLock::as_slice for safety.
         unsafe {
             ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
                 self.as_mut_ptr(),
@@ -518,7 +518,7 @@ impl<T, A: Allocator> From<Vec<T, A>> for GrowLock<T, A> {
     #[inline]
     fn from(value: Vec<T, A>) -> Self {
         let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
-        // SAFETY: the `AtomicVec` is constructed from parts of the given
+        // SAFETY: the `GrowLock` is constructed from parts of the given
         // `Vec` so this is safe.
         unsafe { Self::from_parts_in(ptr, len, cap, alloc) }
     }
@@ -528,7 +528,7 @@ impl<T, A: Allocator> From<GrowLock<T, A>> for Vec<T, A> {
     fn from(value: GrowLock<T, A>) -> Self {
         let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
         // SAFETY: the `Vec` is constructed from parts of the given
-        // `AtomicVec` so this is safe.
+        // `GrowLock` so this is safe.
         unsafe { Self::from_parts_in(ptr, len, cap, alloc) }
     }
 }
