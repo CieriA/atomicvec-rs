@@ -15,8 +15,6 @@ mod raw;
 #[cfg(test)]
 mod tests;
 
-// TODO: AtomicVec::extend, AtomicVec::into_iter
-
 use {
     crate::{
         cap::Cap, error::TryReserveError, guard::AtomicVecGuard,
@@ -51,14 +49,24 @@ pub struct AtomicVec<T, A: Allocator = Global> {
 /// A>`] between threads as we have exclusive ownership of the buffer.
 ///
 /// No thread can access the data while it's being moved.
-unsafe impl<T: Send, A: Allocator + Send> Send for AtomicVec<T, A> {}
+unsafe impl<T, A> Send for AtomicVec<T, A>
+where
+    T: Send,
+    A: Send + Allocator,
+{
+}
 /// # Safety:
 /// If both `T` and `A` are [`Sync`], there's no interior mutability outside
 /// the [`mutex`](Mutex) and the [`len`](AtomicUsize) (which is thread-safe).
 ///
 /// All writes to the buffer are handled along the [`mutex`](Mutex), and so
 /// this collection is [`Sync`]
-unsafe impl<T: Send + Sync, A: Allocator + Sync> Sync for AtomicVec<T, A> {}
+unsafe impl<T, A> Sync for AtomicVec<T, A>
+where
+    T: Sync + Send,
+    A: Sync + Allocator,
+{
+}
 
 /// Getters for [`AtomicVec<T>`]
 impl<T, A: Allocator> AtomicVec<T, A> {
@@ -110,6 +118,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     pub(crate) const unsafe fn as_non_null_ref(&self) -> NonNull<T> {
         self.buf.as_non_null()
     }
+    /// UB: if the slice is empty
     #[inline]
     #[must_use]
     pub fn as_slice(&self) -> &[T] {
@@ -199,7 +208,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
     #[inline]
     pub unsafe fn from_parts_in(
         ptr: NonNull<T>,
-        len: AtomicUsize,
+        len: usize,
         capacity: usize,
         alloc: A,
     ) -> Self {
@@ -212,7 +221,7 @@ impl<T, A: Allocator> AtomicVec<T, A> {
                     alloc,
                 )
             },
-            len,
+            len: AtomicUsize::new(len),
             mutex: Mutex::new(()),
         }
     }
@@ -323,6 +332,11 @@ impl<T> AtomicVec<T> {
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self::with_capacity_in(capacity, Global)
+    }
+    #[inline]
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::with_capacity(0)
     }
 
     /// Constructs a new [`AtomicVec<T>`] directly from a [`NonNull`] pointer,
@@ -486,7 +500,16 @@ impl<T, A: Allocator> From<Vec<T, A>> for AtomicVec<T, A> {
         let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
         // SAFETY: the `AtomicVec` is constructed from parts of the given `Vec`
         // so this is safe.
-        unsafe { Self::from_parts_in(ptr, AtomicUsize::new(len), cap, alloc) }
+        unsafe { Self::from_parts_in(ptr, len, cap, alloc) }
+    }
+}
+impl<T, A: Allocator> From<AtomicVec<T, A>> for Vec<T, A> {
+    #[inline]
+    fn from(value: AtomicVec<T, A>) -> Self {
+        let (ptr, len, cap, alloc) = value.into_parts_with_alloc();
+        // SAFETY: the `Vec` is constructed from parts of the given `AtomicVec`
+        // so this is safe.
+        unsafe { Self::from_parts_in(ptr, len, cap, alloc) }
     }
 }
 

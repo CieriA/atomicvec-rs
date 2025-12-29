@@ -15,7 +15,7 @@ pub(crate) struct RawAtomicVec<T, A: Allocator = Global> {
     /// Pointer to the first byte of the buffer.
     ///
     /// Changes to this field are `Undefined Behavior`
-    ptr: NonNull<u8>,
+    ptr: NonNull<T>,
     /// Capacity of the buffer.
     ///
     /// Cannot exceed [`isize::MAX`]
@@ -53,7 +53,7 @@ impl<T, A: Allocator> RawAtomicVec<T, A> {
         let Ok(block) = alloc.allocate(layout) else {
             return Err(TryReserveError::AllocError(layout));
         };
-        let ptr = block.cast::<u8>();
+        let ptr = block.cast::<T>();
 
         Ok(Self {
             ptr,
@@ -164,7 +164,7 @@ impl<T, A: Allocator> RawAtomicVec<T, A> {
                 let size = size_of::<T>().unchecked_mul(self.cap.get());
                 let layout =
                     Layout::from_size_align_unchecked(size, align_of::<T>());
-                Some((self.ptr, layout))
+                Some((self.ptr.cast(), layout))
             }
         }
     }

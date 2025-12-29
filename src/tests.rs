@@ -2,13 +2,16 @@
 // > that causes UB. This is because the [`AtomicVec`] is
 // > instantly dropped.
 
-use std::time::Duration;
 use {
-    crate::{AtomicVec, cap::Cap},
+    crate::{AtomicVec, atomic_vec, cap::Cap},
     std::{
         alloc::System,
-        sync::{atomic::{AtomicUsize, Ordering}, Arc},
-        thread
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        thread,
+        time::Duration,
     },
 };
 
@@ -70,28 +73,76 @@ fn from_vec() {
 // ------------------- macro init -------------------
 
 #[test]
-#[ignore = "not yet implemented"]
 fn empty_macro() {
-    todo!();
+    let vec: AtomicVec<String> = atomic_vec![];
+
+    assert_eq!(vec.as_slice(), &[] as &[String]);
+    assert!(vec.is_empty());
+    assert_eq!(vec.capacity(), 0);
+    let mut guard = vec.lock().unwrap();
+    assert!(guard.try_push("hello world".to_owned()).is_err());
+
+    assert_eq!(vec, AtomicVec::<String>::empty());
 }
 #[test]
-#[ignore = "not yet implemented"]
 fn array_macro() {
-    todo!();
+    let vec: AtomicVec<char> = atomic_vec!(10, ['a', 'b', 'c']);
+
+    assert_eq!(&vec, &['a', 'b', 'c']);
+
+    let mut guard = vec.lock().unwrap();
+    for _ in 0..7 {
+        guard.push('_');
+    }
+    assert!(vec.is_full());
 }
 #[test]
-#[ignore = "not yet implemented"]
 fn repeat_macro() {
-    todo!();
+    let vec: AtomicVec<String> = atomic_vec!(15, ["hello".to_owned(); 4]);
+    for str in &vec[..4] {
+        assert_eq!(str, "hello");
+    }
+    let mut guard = vec.lock().unwrap();
+    for _ in 0..11 {
+        guard.push("world".to_owned());
+    }
+    assert!(vec.is_full());
+}
+
+#[test]
+fn array_full_macro() {
+    let vec: AtomicVec<char> = atomic_vec!['a', 'b', 'c'];
+    assert_eq!(&vec, &['a', 'b', 'c']);
+    assert!(vec.is_full());
+}
+
+#[test]
+fn repeat_full_macro() {
+    let vec: AtomicVec<String> = atomic_vec!["hello".to_owned(); 4];
+    for str in &vec[..4] {
+        assert_eq!(str, "hello");
+    }
+    assert!(vec.is_full());
 }
 
 // ------------------- representation -------------------
 #[test]
-#[ignore = "not yet implemented"]
-fn size_align() {
+fn alignment() {
     #[repr(align(64))]
-    struct _Aligned(u64);
-    todo!();
+    #[allow(dead_code, reason = "We need a field to make `Aligned` non-ZST")]
+    struct Aligned(u64);
+
+    let vec = AtomicVec::with_capacity(10);
+    let mut guard = vec.lock().unwrap();
+    for i in 0..10 {
+        guard.push(Aligned(i));
+    }
+    let addr = vec.as_ptr().addr();
+    assert_eq!(addr % 64, 0);
+
+    let vec: AtomicVec<Aligned> = atomic_vec![];
+    let addr = vec.as_ptr().addr();
+    assert_eq!(addr % 64, 0);
 }
 
 // ------------------- push panics -------------------
@@ -147,6 +198,26 @@ fn initialized_drop() {
         // here `vec` is dropped
     }
     assert_eq!(counter.load(Ordering::Relaxed), 100);
+}
+
+#[test]
+fn zst_drop() {
+    static ZST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    struct AddZST;
+    impl Drop for AddZST {
+        fn drop(&mut self) {
+            ZST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    {
+        let vec = AtomicVec::with_capacity(200);
+        let mut guard = vec.lock().unwrap();
+        for _ in 0..150 {
+            guard.push(AddZST);
+        }
+        // here `vec` is dropped
+    }
+    assert_eq!(ZST_COUNTER.load(Ordering::Relaxed), 150);
 }
 
 // ------------------- write -------------------

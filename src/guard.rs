@@ -85,7 +85,7 @@ impl<T, A: Allocator> AtomicVecGuard<'_, T, A> {
 
 impl<T, A: Allocator> Extend<T> for AtomicVecGuard<'_, T, A> {
     /// Extends the [`AtomicVec<T>`] with the contents of an iterator.
-    /// 
+    ///
     /// # Panics
     /// This panics if the iterator has more elements than `self.capacity() -
     /// self.len()` (i.e. pushing all the elements would overflow
