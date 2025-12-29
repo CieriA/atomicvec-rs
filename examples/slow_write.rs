@@ -1,5 +1,7 @@
-use growlock::grow_lock;
-use std::{thread, time::Duration, sync::Arc};
+use {
+    growlock::grow_lock,
+    std::{sync::Arc, thread, time::Duration},
+};
 
 fn main() {
     // we initialize the lock
@@ -17,7 +19,6 @@ fn main() {
 
     // wait for the second thread to lock `lock`
     thread::sleep(Duration::from_millis(30));
-
 
     assert!(lock.len() >= 3);
 

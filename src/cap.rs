@@ -25,7 +25,7 @@ impl Cap {
 
     /// Creates a new `capacity` if it is <= [`isize::MAX`]
     ///
-    /// if `T` is a ZST, this returns a capacity of zero.
+    /// if `T` is a ZST, this returns a capacity value of zero.
     #[inline]
     pub(crate) const fn new<T>(cap: usize) -> Option<Self> {
         const I_MAX: usize = isize::MAX as usize;

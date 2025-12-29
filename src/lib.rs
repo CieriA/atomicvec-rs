@@ -99,20 +99,26 @@ impl<T, A: Allocator> GrowLock<T, A> {
     }
     #[inline]
     #[must_use]
+    #[doc = include_str!("../docs/as_ptr.md")]
     pub const fn as_ptr(&self) -> *const T {
         self.buf.as_ptr()
     }
     #[inline]
     #[must_use]
+    #[doc = include_str!("../docs/as_mut_ptr.md")]
     pub const fn as_mut_ptr(&mut self) -> *mut T {
         self.buf.as_mut_ptr()
     }
     #[inline]
     #[must_use]
+    #[doc = include_str!("../docs/as_non_null.md")]
     pub const fn as_non_null(&mut self) -> NonNull<T> {
         self.buf.as_non_null()
     }
-    /// SAFETY:
+    /// Same as [`GrowLock::as_non_null`], but takes `self` by
+    /// immutable reference.
+    ///
+    /// # SAFETY:
     /// calling this method is safe, but using the ptr is not. It's okay
     /// because this is private and only used in the guard.
     #[inline]
@@ -120,7 +126,10 @@ impl<T, A: Allocator> GrowLock<T, A> {
     pub(crate) const unsafe fn as_non_null_ref(&self) -> NonNull<T> {
         self.buf.as_non_null()
     }
-    /// UB: if the slice is empty
+
+    /// Extracts a slice containing the entire vector up to `self.len()`
+    ///
+    /// Equivalent to `&self[..]`
     #[inline]
     #[must_use]
     pub fn as_slice(&self) -> &[T] {
@@ -136,11 +145,11 @@ impl<T, A: Allocator> GrowLock<T, A> {
         unsafe { slice::from_raw_parts(self.as_ptr(), self.len()) }
     }
 
-    /// Constructs a new [`GrowLock<T>`] in the provided allocator,
+    /// Creates a new [`GrowLock<T>`] in the provided allocator,
     /// returning an error if the allocation fails
     ///
     /// # Errors
-    /// Returns an error if:
+    /// If any of these conditions happen, an error is returned:
     /// * `cap * size_of::<T>` overflows [`isize::MAX`]
     /// * memory is exhausted
     ///
@@ -168,7 +177,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
         })
     }
 
-    /// Constructs a new [`GrowLock<T>`] in the provided allocator.
+    /// Creates a new [`GrowLock<T>`] in the provided allocator.
     ///
     /// # Examples
     /// ```
@@ -182,9 +191,9 @@ impl<T, A: Allocator> GrowLock<T, A> {
     #[must_use]
     #[allow(clippy::missing_panics_doc)]
     pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
-        let cap = Cap::new::<T>(capacity).unwrap_or_else(|| {
-            panic!("{}", TryReserveError::CapacityOverflow)
-        });
+        let Some(cap) = Cap::new::<T>(capacity) else {
+            panic!("{}", TryReserveError::CapacityOverflow);
+        };
         let buf = RawGrowLock::with_capacity_in(cap, alloc);
 
         Self {
@@ -193,7 +202,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
             mutex: Mutex::new(()),
         }
     }
-    /// Constructs a new [`GrowLock<T>`] directly from a [`NonNull`]
+    /// Creates a new [`GrowLock<T>`] directly from a [`NonNull`]
     /// pointer, a capacity, and an allocator.
     ///
     /// # Safety
@@ -230,7 +239,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
             mutex: Mutex::new(()),
         }
     }
-    /// Constructs a new [`GrowLock<T>`] directly from a pointer,
+    /// Creates a new [`GrowLock<T>`] directly from a pointer,
     /// a capacity, and an allocator.
     ///
     /// # Safety
@@ -322,7 +331,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
 }
 
 impl<T> GrowLock<T> {
-    /// Constructs a new [`GrowLock<T>`],
+    /// Creates a new [`GrowLock<T>`],
     /// returning an error if the allocation fails
     ///
     /// # Errors
@@ -343,7 +352,7 @@ impl<T> GrowLock<T> {
         Self::try_with_capacity_in(capacity, Global)
     }
 
-    /// Constructs a new [`GrowLock<T>`].
+    /// Creates a new [`GrowLock<T>`].
     ///
     /// # Examples
     /// ```
@@ -357,7 +366,7 @@ impl<T> GrowLock<T> {
         Self::with_capacity_in(capacity, Global)
     }
 
-    /// Constructs a new [`GrowLock<T>`] directly from a [`NonNull`]
+    /// Creates a new [`GrowLock<T>`] directly from a [`NonNull`]
     /// pointer, and a capacity.
     ///
     /// # Safety
@@ -391,7 +400,7 @@ impl<T> GrowLock<T> {
             mutex: Mutex::new(()),
         }
     }
-    /// Constructs a new [`GrowLock<T>`] directly from a pointer, and
+    /// Creates a new [`GrowLock<T>`] directly from a pointer, and
     /// a capacity.
     ///
     /// # Safety

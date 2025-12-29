@@ -1,3 +1,5 @@
+//! Inner representation of [`GrowLock`](crate::GrowLock).
+
 use {
     crate::{cap::Cap, error::TryReserveError},
     std::{
@@ -8,7 +10,7 @@ use {
     },
 };
 
-/// Inner representation of [`GrowLock`](crate::GrowLock).
+/// Inner buffer of [`GrowLock`](crate::GrowLock).
 pub(crate) struct RawGrowLock<T, A: Allocator = Global> {
     ptr: NonNull<T>,
     cap: Cap,
@@ -17,11 +19,11 @@ pub(crate) struct RawGrowLock<T, A: Allocator = Global> {
 }
 
 impl<T, A: Allocator> RawGrowLock<T, A> {
-    /// Constructs a new [`RawGrowLock<T>`] in the provided allocator,
+    /// Creates a new [`RawGrowLock<T>`] in the provided allocator,
     /// returning an error if the allocation fails
     ///
     /// # Errors
-    /// Returns an error if:
+    /// If any of these conditions happen, an error is returned:
     /// * `cap * size_of::<T>` overflows `isize::MAX`
     /// * memory is exhausted
     pub(crate) fn try_with_capacity_in(
@@ -54,7 +56,7 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
             _marker: PhantomData,
         })
     }
-    /// Constructs a new [`RawGrowLock<T>`] in the provided allocator.
+    /// Creates a new [`RawGrowLock<T>`] in the provided allocator.
     #[inline]
     pub(crate) fn with_capacity_in(cap: Cap, alloc: A) -> Self {
         match Self::try_with_capacity_in(cap, alloc) {
@@ -65,7 +67,7 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
             }
         }
     }
-    /// Constructs a new [`RawGrowLock<T>`] directly from a
+    /// Creates a new [`RawGrowLock<T>`] directly from a
     /// [`NonNull`] pointer, a capacity, and an allocator.
     ///
     /// # Safety
@@ -92,7 +94,7 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
             _marker: PhantomData,
         }
     }
-    /// Constructs a new [`RawGrowLock<T>`] directly from a pointer,
+    /// Creates a new [`RawGrowLock<T>`] directly from a pointer,
     /// a capacity, and an allocator.
     ///
     /// # Safety
@@ -115,20 +117,22 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
     ) -> Self {
         Self {
             // SAFETY: the safety contract is transferred to the caller.
-            ptr: unsafe { NonNull::new_unchecked(ptr).cast() },
+            ptr: unsafe { NonNull::new_unchecked(ptr) },
             cap,
             alloc,
             _marker: PhantomData,
         }
     }
     // FIXME should these be taking &mut self?
+
     #[inline]
+    #[doc = include_str!("../docs/as_non_null.md")]
     pub(crate) const fn as_non_null(&self) -> NonNull<T> {
-        self.ptr.cast()
+        self.ptr
     }
     #[inline]
     pub(crate) const fn as_mut_ptr(&self) -> *mut T {
-        self.as_non_null().as_ptr()
+        self.ptr.as_ptr()
     }
     #[inline]
     pub(crate) const fn as_ptr(&self) -> *const T {
