@@ -99,19 +99,19 @@ impl<T, A: Allocator> GrowLock<T, A> {
     }
     #[inline]
     #[must_use]
-    #[doc = include_str!("../docs/as_ptr.md")]
+    #[doc = include_str!("../docs/as_ptr/as_ptr.md")]
     pub const fn as_ptr(&self) -> *const T {
         self.buf.as_ptr()
     }
     #[inline]
     #[must_use]
-    #[doc = include_str!("../docs/as_mut_ptr.md")]
+    #[doc = include_str!("../docs/as_ptr/as_mut_ptr.md")]
     pub const fn as_mut_ptr(&mut self) -> *mut T {
         self.buf.as_mut_ptr()
     }
     #[inline]
     #[must_use]
-    #[doc = include_str!("../docs/as_non_null.md")]
+    #[doc = include_str!("../docs/as_ptr/as_non_null.md")]
     pub const fn as_non_null(&mut self) -> NonNull<T> {
         self.buf.as_non_null()
     }

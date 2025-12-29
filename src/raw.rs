@@ -126,7 +126,7 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
     // FIXME should these be taking &mut self?
 
     #[inline]
-    #[doc = include_str!("../docs/as_non_null.md")]
+    #[doc = include_str!("../docs/as_ptr/as_non_null.md")]
     pub(crate) const fn as_non_null(&self) -> NonNull<T> {
         self.ptr
     }

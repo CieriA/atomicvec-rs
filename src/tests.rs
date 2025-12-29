@@ -235,11 +235,13 @@ fn write_contention() {
     let lock = Arc::new(GrowLock::with_capacity(CAP));
     let mut handles = Vec::with_capacity(THREADS);
     for t in 0..THREADS {
-        let v = Arc::clone(&lock);
-        handles.push(thread::spawn(move || {
-            for i in 0..(CAP / THREADS) {
-                let mut guard = v.write().unwrap();
-                guard.push(t * (CAP / THREADS) + i);
+        handles.push(thread::spawn({
+            let lock_clone = Arc::clone(&lock);
+            move || {
+                for i in 0..(CAP / THREADS) {
+                    let mut guard = lock_clone.write().unwrap();
+                    guard.push(t * (CAP / THREADS) + i);
+                }
             }
         }));
     }
@@ -272,12 +274,14 @@ fn slow_write() {
         let mut guard = lock.write().unwrap();
         guard.extend(["hi", "hello", "world"]);
     }
-    let lock_clone = Arc::clone(&lock);
-    let handle = thread::spawn(move || {
-        let mut guard = lock_clone.write().unwrap();
-        guard.push("foo");
-        thread::sleep(Duration::from_millis(300));
-        guard.push("bar");
+    let handle = thread::spawn({
+        let lock_clone = Arc::clone(&lock);
+        move || {
+            let mut guard = lock_clone.write().unwrap();
+            guard.push("foo");
+            thread::sleep(Duration::from_millis(300));
+            guard.push("bar");
+        }
     });
 
     // we wait for the writer to take the lock
@@ -297,4 +301,21 @@ fn slow_write() {
     // at this point all the elements are already pushed
     assert_eq!(lock.len(), 5);
     assert_eq!(&lock[3..], &["foo", "bar"]);
+}
+
+// ------------------- poisoning -------------------
+
+#[test]
+fn poisoning() {
+    let lock = Arc::new(GrowLock::with_capacity(5));
+    let handle = thread::spawn({
+        let lock_clone = Arc::clone(&lock);
+        move || {
+            let mut guard = lock_clone.write().unwrap();
+            guard.push('a');
+            panic!("oops!");
+        }
+    });
+
+    assert!(lock.write().is_err());
 }
