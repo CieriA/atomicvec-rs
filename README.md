@@ -51,7 +51,7 @@ growlock = { path = "<PATH>", version = "0.1.0" }
 ```
 (Substituting `<PATH>` with the path where you stored this library.)
 
-[crates.io]: https://blank
+[crates.io]: https://crates.io
 
 # License
 
