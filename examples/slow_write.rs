@@ -1,3 +1,9 @@
+//! Imagine we have a very slow writer, but while it writes we still need
+//! to read.
+//!
+//! [`GrowLock`] is perfect for this case, because writes do not block
+//! reads.
+
 use {
     growlock::grow_lock,
     std::{sync::Arc, thread, time::Duration},

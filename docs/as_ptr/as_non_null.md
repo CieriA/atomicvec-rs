@@ -1,5 +1,5 @@
 Returns a [`NonNull`] pointer to the [`GrowLock`]'s buffer, or a dangling
-[`NonZero`] pointer valid for zero sized reads if the [`GrowLock`] didn't
+[`NonNull`] pointer valid for zero sized reads if the [`GrowLock`] didn't
 allocate.
 
 The caller must ensure that the [`GrowLock`] outlives the pointer returned by
