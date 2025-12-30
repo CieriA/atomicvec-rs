@@ -290,6 +290,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
     }
 
     #[inline]
+    #[doc(alias = "lock")]
     pub fn write(&self) -> LockResult<GrowGuard<'_, T, A>> {
         match self.mutex.lock() {
             Ok(guard) => Ok(GrowGuard::new(self, guard)),
@@ -300,6 +301,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
         }
     }
     #[inline]
+    #[doc(alias = "try_lock")]
     pub fn try_write(&self) -> TryLockResult<GrowGuard<'_, T, A>> {
         match self.mutex.try_lock() {
             Ok(guard) => Ok(GrowGuard::new(self, guard)),
