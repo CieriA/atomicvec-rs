@@ -12,7 +12,7 @@ you should use `RwLock<Vec<T>>` instead.
 
 # Example
 ```rust
-use growlock_grow_lock;
+use growlock::grow_lock;
 
 fn main() {
     let lock = grow_lock!(10, [1, 2, 3]);
