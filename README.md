@@ -36,7 +36,7 @@ fn main() {
 }
 ```
 
-You can find more examples in the [example directory](examples).
+You can find more examples in the [examples directory](examples).
 
 # Usage
 
