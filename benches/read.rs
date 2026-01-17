@@ -1,8 +1,14 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use {
     criterion::{Criterion, criterion_group, criterion_main},
-    std::{hint::black_box, sync::Arc, thread},
     growlock::grow_lock,
+    std::{
+        hint::black_box,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        thread,
+    },
 };
 
 fn read_latency(crit: &mut Criterion) {

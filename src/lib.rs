@@ -3,7 +3,8 @@
 //! ```
 #![doc = include_str!("../examples/basic_usage.rs")]
 //! ```
-#![feature(allocator_api, sized_type_properties)]
+#![feature(allocator_api)]
+extern crate core;
 
 mod cap;
 pub mod error;
@@ -44,9 +45,6 @@ use {
     },
 };
 
-// TODO: maybe there is a way to implement `pop`?
-//  -> this changes all the structure of `GrowLock`
-
 #[doc = include_str!("../docs/growlock.md")]
 /// # Examples
 /// ```
@@ -72,7 +70,7 @@ where
 }
 /// # Safety:
 /// If both `T` and `A` are [`Sync`], there's no interior mutability
-/// outside the [`mutex`](Mutex) and the [`len`](AtomicUsize) (which is
+/// outside the [`mutex`](Mutex) and the [`len`](AtomicUsize) (which are
 /// thread-safe).
 ///
 /// All writes to the buffer are handled along the [`mutex`](Mutex), and so
@@ -80,31 +78,232 @@ where
 unsafe impl<T, A> Sync for GrowLock<T, A>
 where
     T: Sync + Send,
-    A: Sync + Allocator,
+    A: Sync + Send + Allocator,
 {
 }
 
+/// [`Global`] only methods
+impl<T> GrowLock<T> {
+    /// Creates a new [`GrowLock<T>`],
+    /// returning an error if the allocation fails
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// * `cap * size_of::<T>` overflows `isize::MAX`
+    /// * memory is exhausted
+    ///
+    /// # Examples
+    /// ```
+    /// use growlock::GrowLock;
+    ///
+    /// let lock: GrowLock<()> = GrowLock::try_with_capacity(10).unwrap();
+    /// ```
+    #[inline]
+    pub fn try_with_capacity(
+        capacity: usize,
+    ) -> Result<Self, TryReserveError> {
+        Self::try_with_capacity_in(capacity, Global)
+    }
+
+    /// Creates a new [`GrowLock<T>`].
+    ///
+    /// # Examples
+    /// ```
+    /// use growlock::GrowLock;
+    ///
+    /// let lock: GrowLock<String> = GrowLock::with_capacity(10);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_in(capacity, Global)
+    }
+
+    /// Creates a new [`GrowLock<T>`] directly from a [`NonNull`]
+    /// pointer, and a capacity.
+    ///
+    /// # Safety
+    /// * `ptr` must be currently allocated with the global allocator.
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
+    ///   with.
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * `capacity` needs to fit the layout size that the pointer was
+    ///   allocated with.
+    /// * the allocated size in bytes cannot exceed [`isize::MAX`]
+    /// * `len` must be <= `capacity`
+    /// * at least `len` elements starting from `ptr` need to be properly
+    ///   initialized values of type `T`.
+    #[inline]
+    pub unsafe fn from_parts(
+        ptr: NonNull<T>,
+        len: AtomicUsize,
+        capacity: usize,
+    ) -> Self {
+        Self {
+            // SAFETY: the  safety contract must be upheld by the caller
+            buf: unsafe {
+                RawGrowLock::from_nonnull_in(
+                    ptr,
+                    Cap::new_unchecked::<T>(capacity),
+                    Global,
+                )
+            },
+            len,
+            mutex: Mutex::new(()),
+        }
+    }
+    /// Creates a new [`GrowLock<T>`] directly from a pointer, and
+    /// a capacity.
+    ///
+    /// # Safety
+    /// * `ptr` must be currently allocated with the global allocator.
+    /// * `T` needs to have the same alignment as what `ptr` was allocated
+    ///   with.
+    /// * `size_of::<T>() * cap` must be the same as the size the pointer
+    ///   was allocated with.
+    /// * `capacity` needs to fit the layout size that the pointer was
+    ///   allocated with.
+    /// * the allocated size in bytes cannot exceed [`isize::MAX`]
+    /// * `len` must be <= `capacity`
+    /// * at least `len` elements starting from `ptr` need to be properly
+    ///   initialized values of type `T`.
+    #[inline]
+    pub unsafe fn from_raw_parts(
+        ptr: *mut T,
+        len: AtomicUsize,
+        capacity: usize,
+    ) -> Self {
+        Self {
+            // SAFETY: the  safety contract must be upheld by the caller
+            buf: unsafe {
+                RawGrowLock::from_raw_in(
+                    ptr,
+                    Cap::new_unchecked::<T>(capacity),
+                    Global,
+                )
+            },
+            len,
+            mutex: Mutex::new(()),
+        }
+    }
+    /// Decomposes a [`GrowLock<T>`] into its raw components:
+    /// ([`NonNull`] pointer, length, capacity).
+    ///
+    /// After calling this function, the caller is responsible for cleaning
+    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
+    /// [`from_parts`](GrowLock::from_parts).
+    #[inline]
+    pub fn into_parts(self) -> (NonNull<T>, usize, usize) {
+        let mut this = ManuallyDrop::new(self);
+        (this.as_non_null(), this.len(), this.capacity())
+    }
+    /// Decomposes a [`GrowLock<T>`] into its raw components:
+    /// (pointer, length, capacity).
+    ///
+    /// After calling this function, the caller is responsible for cleaning
+    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
+    /// [`from_raw_parts`](GrowLock::from_raw_parts).
+    #[inline]
+    pub fn into_raw_parts(self) -> (*mut T, usize, usize) {
+        let mut this = ManuallyDrop::new(self);
+        (this.as_mut_ptr(), this.len(), this.capacity())
+    }
+}
+
 impl<T, A: Allocator> GrowLock<T, A> {
+    /// Returns `true` if the [`GrowLock`] contains no elements, i.e. the
+    /// `len` is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use growlock::GrowLock;
+    ///
+    /// let lock = GrowLock::with_capacity(5);
+    /// assert!(lock.is_empty());
+    ///
+    /// let mut guard = lock.write().unwrap();
+    /// guard.push(42);
+    /// assert!(!lock.is_empty());
+    /// ```
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Returns `true` if the [`GrowLock`] cannot hold more elements, i.e.
+    /// the `len` and the `capacity` are the same.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use growlock::GrowLock;
+    ///
+    /// let lock = GrowLock::with_capacity(5);
+    /// assert!(!lock.is_full());
+    ///
+    /// let mut guard = lock.write().unwrap();
+    /// guard.extend([1, 2, 3, 4, 5]);
+    /// assert!(lock.is_full());
+    /// ```
     #[inline]
     #[must_use]
     pub fn is_full(&self) -> bool {
         self.len() == self.capacity()
     }
+
+    /// Returns the total number of elements the [`GrowLock`] can hold.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use growlock::GrowLock;
+    ///
+    /// let v: GrowLock<i32> = GrowLock::with_capacity(5);
+    /// assert!(v.capacity() >= 5);
+    /// ```
+    ///
+    /// A [`GrowLock`] with zero-sized elements will always have a capacity
+    /// of `usize::MAX`:
+    ///
+    /// ```
+    /// use growlock::grow_lock;
+    ///
+    /// #[derive(Clone)]
+    /// struct ZeroSized;
+    ///
+    /// fn main() {
+    ///     assert_eq!(size_of::<ZeroSized>(), 0);
+    ///     let lock = grow_lock!(0, [ZeroSized; 0]);
+    ///     assert_eq!(lock.capacity(), usize::MAX);
+    /// }
+    /// ```
     #[inline]
     #[must_use]
     pub const fn capacity(&self) -> usize {
         self.buf.capacity()
     }
+
+    /// Returns the number of elements in the [`GrowLock`], i.e. its
+    /// `length`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use growlock::grow_lock;
+    ///
+    /// let lock = grow_lock!(10, [1, 2, 3]);
+    /// assert_eq!(lock.len(), 3)
+    /// ```
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
         self.len.load(Ordering::Acquire)
     }
+
+    /// Returns a reference to the underlying allocator.
     #[inline]
     #[must_use]
     pub const fn allocator(&self) -> &A {
@@ -289,6 +488,36 @@ impl<T, A: Allocator> GrowLock<T, A> {
         }
     }
 
+    /// Locks this [`GrowLock`] for writes, blocking the current thread
+    /// until it can be acquired. Note that this does not lock the
+    /// [`GrowLock`] for reads.
+    ///
+    /// This function will not return while other writers currently have
+    /// access to the lock.
+    ///
+    /// Returns an RAII guard which will drop the write access of this
+    /// [`GrowLock`] when dropped.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the [`GrowLock`] is poisoned.
+    /// An [`GrowLock`] is poisoned whenever a writer panics while holding
+    /// an exclusive lock. An error will be returned when the lock is
+    /// acquired. The acquired lock guard will be contained in the returned
+    /// error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use growlock::GrowLock;
+    ///
+    /// let lock = GrowLock::with_capacity(5);
+    /// let mut guard = lock.write().unwrap();
+    /// guard.push(1);
+    /// assert!(lock.try_write().is_err());
+    /// guard.push(2);
+    /// assert_eq!(&lock[..], &[1, 2]);
+    /// ```
     #[inline]
     #[doc(alias = "lock")]
     pub fn write(&self) -> LockResult<GrowGuard<'_, T, A>> {
@@ -300,6 +529,48 @@ impl<T, A: Allocator> GrowLock<T, A> {
             }
         }
     }
+
+    /// Attempts to lock this [`GrowLock`] with exclusive write access.
+    ///
+    /// If the lock could not be acquired at this time, then Err is
+    /// returned. Otherwise, an RAII guard is returned which will release
+    /// the lock when it is dropped.
+    ///
+    /// This function does not block.
+    ///
+    /// This function does not provide any guarantees with respect to the
+    /// ordering of whether contentious readers or writers will acquire the
+    /// lock first.
+    ///
+    /// # Errors
+    /// This function will return the [`Poisoned`] error if the
+    /// [`GrowLock`] is poisoned. An [`GrowLock`] is poisoned whenever
+    /// a writer panics while holding an exclusive lock. Poisoned will
+    /// only be returned if the lock would have otherwise been
+    /// acquired. An acquired lock guard will be contained in the
+    /// returned error.
+    ///
+    /// This function will return the [`WouldBlock`] error if the
+    /// [`GrowLock`] could not be acquired because it was already
+    /// locked.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use growlock::GrowLock;
+    ///
+    /// let lock = GrowLock::with_capacity(5);
+    /// {
+    ///     let mut guard = lock.write().unwrap();
+    ///     guard.push(1);
+    ///     assert!(lock.try_write().is_err());
+    ///     guard.push(2);
+    /// }
+    /// assert!(lock.try_write().is_ok());
+    /// ```
+    ///
+    /// [`Poisoned`]: TryLockError::Poisoned
+    /// [`WouldBlock`]: TryLockError::WouldBlock
     #[inline]
     #[doc(alias = "try_lock")]
     pub fn try_write(&self) -> TryLockResult<GrowGuard<'_, T, A>> {
@@ -343,135 +614,12 @@ impl<T, A: Allocator> GrowLock<T, A> {
         let ptr = ptr.as_ptr();
         (ptr, len, cap, alloc)
     }
-}
-
-impl<T> GrowLock<T> {
-    /// Creates a new [`GrowLock<T>`],
-    /// returning an error if the allocation fails
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// * `cap * size_of::<T>` overflows `isize::MAX`
-    /// * memory is exhausted
-    ///
-    /// # Examples
-    /// ```
-    /// use growlock::GrowLock;
-    ///
-    /// let lock: GrowLock<()> = GrowLock::try_with_capacity(10).unwrap();
-    /// ```
     #[inline]
-    pub fn try_with_capacity(
-        capacity: usize,
-    ) -> Result<Self, TryReserveError> {
-        Self::try_with_capacity_in(capacity, Global)
-    }
-
-    /// Creates a new [`GrowLock<T>`].
-    ///
-    /// # Examples
-    /// ```
-    /// use growlock::GrowLock;
-    ///
-    /// let lock: GrowLock<String> = GrowLock::with_capacity(10);
-    /// ```
-    #[inline]
-    #[must_use]
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self::with_capacity_in(capacity, Global)
-    }
-
-    /// Creates a new [`GrowLock<T>`] directly from a [`NonNull`]
-    /// pointer, and a capacity.
-    ///
-    /// # Safety
-    /// * `ptr` must be currently allocated with the global allocator.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated
-    ///   with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer
-    ///   was allocated with.
-    /// * `capacity` needs to fit the layout size that the pointer was
-    ///   allocated with.
-    /// * the allocated size in bytes cannot exceed [`isize::MAX`]
-    /// * `len` must be <= `capacity`
-    /// * at least `len` elements starting from `ptr` need to be properly
-    ///   initialized values of type `T`.
-    #[inline]
-    pub unsafe fn from_parts(
-        ptr: NonNull<T>,
-        len: AtomicUsize,
-        capacity: usize,
-    ) -> Self {
-        Self {
-            // SAFETY: the  safety contract must be upheld by the caller
-            buf: unsafe {
-                RawGrowLock::from_nonnull_in(
-                    ptr,
-                    Cap::new_unchecked::<T>(capacity),
-                    Global,
-                )
-            },
-            len,
-            mutex: Mutex::new(()),
-        }
-    }
-    /// Creates a new [`GrowLock<T>`] directly from a pointer, and
-    /// a capacity.
-    ///
-    /// # Safety
-    /// * `ptr` must be currently allocated with the global allocator.
-    /// * `T` needs to have the same alignment as what `ptr` was allocated
-    ///   with.
-    /// * `size_of::<T>() * cap` must be the same as the size the pointer
-    ///   was allocated with.
-    /// * `capacity` needs to fit the layout size that the pointer was
-    ///   allocated with.
-    /// * the allocated size in bytes cannot exceed [`isize::MAX`]
-    /// * `len` must be <= `capacity`
-    /// * at least `len` elements starting from `ptr` need to be properly
-    ///   initialized values of type `T`.
-    #[inline]
-    pub unsafe fn from_raw_parts(
-        ptr: *mut T,
-        len: AtomicUsize,
-        capacity: usize,
-    ) -> Self {
-        Self {
-            // SAFETY: the  safety contract must be upheld by the caller
-            buf: unsafe {
-                RawGrowLock::from_raw_in(
-                    ptr,
-                    Cap::new_unchecked::<T>(capacity),
-                    Global,
-                )
-            },
-            len,
-            mutex: Mutex::new(()),
-        }
-    }
-    /// Decomposes a [`GrowLock<T>`] into its raw components:
-    /// ([`NonNull`] pointer, length, capacity).
-    ///
-    /// After calling this function, the caller is responsible for cleaning
-    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
-    /// [`from_parts`](GrowLock::from_parts).
-    #[inline]
-    pub fn into_parts(self) -> (NonNull<T>, usize, usize) {
-        let mut this = ManuallyDrop::new(self);
-        (this.as_non_null(), this.len(), this.capacity())
-    }
-    /// Decomposes a [`GrowLock<T>`] into its raw components:
-    /// (pointer, length, capacity).
-    ///
-    /// After calling this function, the caller is responsible for cleaning
-    /// up the [`GrowLock<T>`]. Most often, you can do this by calling
-    /// [`from_raw_parts`](GrowLock::from_raw_parts).
-    #[inline]
-    pub fn into_raw_parts(self) -> (*mut T, usize, usize) {
-        let mut this = ManuallyDrop::new(self);
-        (this.as_mut_ptr(), this.len(), this.capacity())
+    pub fn ptr_eq(&self, rhs: &Self) -> bool {
+        self.as_ptr() == rhs.as_ptr()
     }
 }
+
 impl<T, A: Allocator> Drop for GrowLock<T, A> {
     fn drop(&mut self) {
         // if `T::IS_ZST` then `capacity()` returns `usize::MAX`

@@ -1,11 +1,13 @@
 //! Inner representation of [`GrowLock`](crate::GrowLock).
 
 use {
-    crate::{cap::Cap, error::TryReserveError},
+    crate::{
+        cap::{Cap, is_zst},
+        error::TryReserveError,
+    },
     std::{
         alloc::{Allocator, Global, Layout, handle_alloc_error},
         marker::PhantomData,
-        mem::SizedTypeProperties as _,
         ptr::NonNull,
     },
 };
@@ -140,7 +142,7 @@ impl<T, A: Allocator> RawGrowLock<T, A> {
     }
     #[inline]
     pub(crate) const fn capacity(&self) -> usize {
-        if T::IS_ZST {
+        if is_zst::<T>() {
             usize::MAX
         } else {
             self.cap.get()
