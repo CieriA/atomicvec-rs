@@ -339,3 +339,101 @@ fn poisoning() {
 
     assert!(lock.write().is_err());
 }
+
+// ------------------- traits -------------------
+
+#[test]
+fn eq() {
+    let lock1 = grow_lock!(5, [1, 2, 3]);
+    let lock2 = grow_lock!(10, [1, 2, 3]);
+    let lock3 = grow_lock!(3, [3, 2, 1]);
+
+    // PartialEq
+    assert_eq!(lock1, lock2);
+    assert_eq!(lock2, lock1);
+    assert_ne!(lock1, lock3);
+    assert_ne!(lock2, lock3);
+    assert_ne!(lock3, lock1);
+    assert_ne!(lock3, lock2);
+    // Eq
+    assert_eq!(lock1, lock1);
+    assert_eq!(lock2, lock2);
+    assert_eq!(lock3, lock3);
+
+    // with other structures
+    let v = vec![1, 2, 3];
+    assert_eq!(lock1, v);
+    assert_eq!(lock2, v);
+
+    let mut arr = [1, 2, 3];
+    assert_eq!(lock1, arr);
+    assert_eq!(lock2, arr);
+    assert_eq!(arr, lock1);
+    assert_eq!(arr, lock2);
+
+    assert_eq!(lock1, &arr[..]);
+    assert_eq!(lock2, &arr[..]);
+    assert_eq!(&arr[..], lock1);
+    assert_eq!(&arr[..], lock2);
+
+    assert_eq!(lock1, &mut arr[..]);
+    assert_eq!(lock2, &mut arr[..]);
+    assert_eq!(&mut arr[..], lock1);
+    assert_eq!(&mut arr[..], lock2);
+}
+
+#[test]
+fn ptr_eq() {
+    let lock1 = grow_lock!(5, [13, 47, 22]);
+    let lock2 = grow_lock!(5, [13, 47, 22]);
+
+    assert!(lock1.ptr_ne(&lock2));
+    assert!(lock2.ptr_ne(&lock1));
+
+    assert!(lock1.ptr_eq(&lock1));
+    assert!(lock2.ptr_eq(&lock2));
+
+    let lock3 = &lock1;
+    let lock4 = &lock1;
+
+    assert!(lock3.ptr_eq(lock4));
+    assert!(lock4.ptr_eq(lock3));
+}
+
+// ------------------- getters -------------------
+
+#[test]
+fn empty() {
+    let lock1: GrowLock<i8> = grow_lock!(0);
+    let lock2: GrowLock<String> = grow_lock!(12);
+    let lock3: GrowLock<()> = grow_lock!(47);
+
+    assert!(lock1.is_empty());
+    assert!(lock2.is_empty());
+    assert!(lock3.is_empty());
+
+    let mut guard = lock3.write().unwrap();
+    guard.push(());
+
+    assert!(!lock3.is_empty());
+}
+
+#[test]
+fn full() {
+    use std::ptr;
+
+    let lock1 = grow_lock!(2, [17isize]);
+    let lock2 = grow_lock!(3, [ptr::without_provenance(5), ptr::without_provenance(10), ptr::null::<()>()]);
+    let lock3: GrowLock<String> = grow_lock!(0);
+
+    assert!(!lock1.is_full());
+    assert!(lock2.is_full());
+    assert!(lock3.is_full() && lock3.is_empty());
+
+    let mut guard = lock1.write().unwrap();
+    guard.push(42);
+
+    assert!(lock1.is_full());
+}
+
+

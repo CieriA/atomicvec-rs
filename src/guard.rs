@@ -82,7 +82,7 @@ impl<'lock, T, A: Allocator> GrowGuard<'lock, T, A> {
         unsafe {
             let dst = self.lock.as_non_null_ref().add(len);
             dst.write(value);
-            self.lock.len.store(len + 1, Ordering::Release);
+            self.lock.len.store(len + 1, Ordering::Relaxed);
         }
     }
     /// # Errors
@@ -102,7 +102,7 @@ impl<'lock, T, A: Allocator> GrowGuard<'lock, T, A> {
             let dst = self.lock.as_non_null_ref().add(len);
             dst.write(value);
         }
-        self.lock.len.store(len + 1, Ordering::Release);
+        self.lock.len.store(len + 1, Ordering::Relaxed);
 
         Ok(())
     }

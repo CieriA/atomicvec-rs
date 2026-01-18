@@ -300,7 +300,7 @@ impl<T, A: Allocator> GrowLock<T, A> {
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.len.load(Ordering::Acquire)
+        self.len.load(Ordering::Relaxed)
     }
 
     /// Returns a reference to the underlying allocator.
@@ -618,6 +618,10 @@ impl<T, A: Allocator> GrowLock<T, A> {
     pub fn ptr_eq(&self, rhs: &Self) -> bool {
         self.as_ptr() == rhs.as_ptr()
     }
+    #[inline]
+    pub fn ptr_ne(&self, rhs: &Self) -> bool {
+        !self.ptr_eq(rhs)
+    }
 }
 
 impl<T, A: Allocator> Drop for GrowLock<T, A> {
@@ -705,8 +709,7 @@ impl<T, A: Allocator> From<GrowLock<T, A>> for Vec<T, A> {
     }
 }
 
-// ----------------------------- PartialEq impl
-// -----------------------------
+// -------------------------- PartialEq impl ---------------------------
 
 impl<T, U, A, A2> PartialEq<GrowLock<U, A2>> for GrowLock<T, A>
 where
