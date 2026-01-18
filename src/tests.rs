@@ -422,8 +422,10 @@ fn empty() {
 fn full() {
     use std::ptr;
 
+    let unit = ();
+
     let lock1 = grow_lock!(2, [17isize]);
-    let lock2 = grow_lock!(3, [ptr::without_provenance(5), ptr::without_provenance(10), ptr::null::<()>()]);
+    let lock2 = grow_lock!(3, [&raw const unit, ptr::without_provenance(10), ptr::null::<()>()]);
     let lock3: GrowLock<String> = grow_lock!(0);
 
     assert!(!lock1.is_full());
